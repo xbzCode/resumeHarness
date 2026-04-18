@@ -1,2 +1,47 @@
-node_modules
-dist
+# web
+node_modules/
+
+dist/
+
+.idea/
+
+.vscode/
+
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+
+# 环境变量
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 测试与覆盖率
+.pytest_cache/
+htmlcov/
+.coverage
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+
+# 参考源码
+OpenHarness

@@ -1,0 +1,46 @@
+/* 学术风 - academic.css */
+/* 适用于高校/研究所 */
+
+@page {
+    size: A4;
+    margin: 2.5cm;
+}
+
+body {
+    font-family: "Times New Roman", "SimSun", serif;
+    font-size: 11pt;
+    line-height: 1.7;
+    color: #222;
+    max-width: 210mm;
+}
+
+h1 {
+    font-size: 18pt;
+    color: #1a1a2e;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+h2 {
+    font-size: 13pt;
+    color: #16213e;
+    border-left: 3px solid #0f3460;
+    padding-left: 10px;
+    margin-top: 18px;
+    margin-bottom: 8px;
+}
+
+h3 {
+    font-size: 11pt;
+    color: #0f3460;
+    margin-top: 10px;
+    margin-bottom: 4px;
+}
+
+ul {
+    padding-left: 20px;
+}
+
+li {
+    margin-bottom: 4px;
+}

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Agent - 极简验证页面</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        h1 { font-size: 24px; margin-bottom: 8px; color: #1a1a2e; }
+        .subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+        .chat-box { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); overflow: hidden; }
+        .messages { height: 500px; overflow-y: auto; padding: 20px; }
+        .msg { margin-bottom: 16px; }
+        .msg-user { text-align: right; }
+        .msg-assistant { text-align: left; }
+        .msg-bubble { display: inline-block; max-width: 80%; padding: 10px 16px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+        .msg-user .msg-bubble { background: #6c5ce7; color: #fff; }
+        .msg-assistant .msg-bubble { background: #f0f0f0; color: #333; }
+        .msg-tool { font-size: 12px; color: #888; margin: 4px 0; }
+        .input-area { display: flex; padding: 16px; border-top: 1px solid #eee; gap: 8px; }
+        .input-area input { flex: 1; padding: 10px 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+        .input-area input:focus { border-color: #6c5ce7; }
+        .input-area button { padding: 10px 24px; background: #6c5ce7; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+        .input-area button:hover { background: #5a4bd1; }
+        .input-area button:disabled { background: #ccc; cursor: not-allowed; }
+        .status { padding: 8px 20px; font-size: 12px; color: #999; }
+        .error { color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Resume Agent</h1>
+        <p class="subtitle">极简功能验证页面 - P0 阶段</p>
+        <div class="chat-box">
+            <div class="messages" id="messages"></div>
+            <div class="status" id="status">就绪</div>
+            <div class="input-area">
+                <input type="text" id="promptInput" placeholder="输入消息，如：帮我优化简历..." />
+                <button id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messagesEl = document.getElementById('messages');
+        const statusEl = document.getElementById('status');
+        const inputEl = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function addMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = `msg msg-${role}`;
+            div.innerHTML = `<div class="msg-bubble">${escapeHtml(text)}</div>`;
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function addToolInfo(toolName, info) {
+            const div = document.createElement('div');
+            div.className = 'msg-tool';
+            div.textContent = `[工具调用] ${toolName}: ${info}`;
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function sendMessage() {
+            const prompt = inputEl.value.trim();
+            if (!prompt) return;
+
+            inputEl.value = '';
+            sendBtn.disabled = true;
+            statusEl.textContent = '发送中...';
+
+            addMessage('user', prompt);
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantText = '';
+                let hasAssistantBubble = false;
+
+                statusEl.textContent = '接收中...';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const jsonStr = line.slice(6).trim();
+                        if (!jsonStr) continue;
+
+                        try {
+                            const event = JSON.parse(jsonStr);
+
+                            if (event.type === 'text_delta') {
+                                if (!hasAssistantBubble) {
+                                    addMessage('assistant', '');
+                                    hasAssistantBubble = true;
+                                }
+                                assistantText += event.text;
+                                const lastBubble = messagesEl.querySelector('.msg-assistant:last-child .msg-bubble');
+                                if (lastBubble) {
+                                    lastBubble.textContent = assistantText;
+                                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                                }
+                            } else if (event.type === 'tool_execution_started') {
+                                addToolInfo(event.tool_name, '执行中...');
+                            } else if (event.type === 'tool_execution_completed') {
+                                const output = event.output.length > 100
+                                    ? event.output.substring(0, 100) + '...'
+                                    : event.output;
+                                addToolInfo(event.tool_name, event.is_error ? `错误: ${output}` : output);
+                            } else if (event.type === 'error') {
+                                statusEl.textContent = `错误: ${event.message}`;
+                                statusEl.className = 'status error';
+                            } else if (event.type === 'assistant_turn_complete') {
+                                statusEl.textContent = '就绪';
+                                statusEl.className = 'status';
+                            } else if (event.type === 'ping') {
+                                // 心跳，忽略
+                            }
+                        } catch (e) {
+                            // 解析失败，忽略
+                        }
+                    }
+                }
+            } catch (err) {
+                addMessage('assistant', `连接失败: ${err.message}`);
+                statusEl.textContent = '连接失败';
+                statusEl.className = 'status error';
+            }
+
+            sendBtn.disabled = false;
+            inputEl.focus();
+        }
+    </script>
+</body>
+</html>

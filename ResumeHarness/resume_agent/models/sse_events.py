@@ -1,0 +1,125 @@
+"""SSE 事件类型定义。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Literal
+
+
+@dataclass(frozen=True)
+class SseTextDelta:
+    """逐字文本增量。"""
+
+    type: Literal["text_delta"] = "text_delta"
+    text: str = ""
+
+
+@dataclass(frozen=True)
+class SseToolExecutionStarted:
+    """工具开始执行通知。"""
+
+    type: Literal["tool_execution_started"] = "tool_execution_started"
+    tool_name: str = ""
+    tool_input: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class SseToolExecutionCompleted:
+    """工具执行结果。"""
+
+    type: Literal["tool_execution_completed"] = "tool_execution_completed"
+    tool_name: str = ""
+    output: str = ""
+    is_error: bool = False
+
+
+@dataclass(frozen=True)
+class SseStatus:
+    """系统状态消息。"""
+
+    type: Literal["status"] = "status"
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class SseError:
+    """错误事件。"""
+
+    type: Literal["error"] = "error"
+    code: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class SseAssistantTurnComplete:
+    """本轮对话完成。"""
+
+    type: Literal["assistant_turn_complete"] = "assistant_turn_complete"
+    usage: dict[str, int] | None = None
+
+
+@dataclass(frozen=True)
+class SsePing:
+    """心跳保活。"""
+
+    type: Literal["ping"] = "ping"
+
+
+@dataclass(frozen=True)
+class SseResumeGenerated:
+    """简历生成完成通知。"""
+
+    type: Literal["resume_generated"] = "resume_generated"
+    resume_id: str = ""
+
+
+@dataclass(frozen=True)
+class SseConnectionTimeout:
+    """连接超时。"""
+
+    type: Literal["connection_timeout"] = "connection_timeout"
+
+
+SseEvent = (
+    SseTextDelta
+    | SseToolExecutionStarted
+    | SseToolExecutionCompleted
+    | SseStatus
+    | SseError
+    | SseAssistantTurnComplete
+    | SsePing
+    | SseResumeGenerated
+    | SseConnectionTimeout
+)
+
+
+def sse_event_to_dict(event: SseEvent) -> dict[str, Any]:
+    """将 SSE 事件序列化为字典。"""
+    result: dict[str, Any] = {"type": event.type}  # type: ignore[attr-defined]
+    if isinstance(event, SseTextDelta):
+        result["text"] = event.text
+    elif isinstance(event, SseToolExecutionStarted):
+        result["tool_name"] = event.tool_name
+        if event.tool_input is not None:
+            result["tool_input"] = event.tool_input
+    elif isinstance(event, SseToolExecutionCompleted):
+        result["tool_name"] = event.tool_name
+        result["output"] = event.output
+        result["is_error"] = event.is_error
+    elif isinstance(event, SseStatus):
+        result["message"] = event.message
+    elif isinstance(event, SseError):
+        result["code"] = event.code
+        result["message"] = event.message
+    elif isinstance(event, SseAssistantTurnComplete):
+        if event.usage is not None:
+            result["usage"] = event.usage
+    elif isinstance(event, SseResumeGenerated):
+        result["resume_id"] = event.resume_id
+    return result
+
+
+def format_sse_data(event: SseEvent) -> str:
+    """格式化为 SSE data 行。"""
+    import json
+    return f"data: {json.dumps(sse_event_to_dict(event), ensure_ascii=False)}\n\n"

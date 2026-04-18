@@ -1,0 +1,51 @@
+/* 简洁商务风 - professional.css */
+/* 适用于互联网/科技行业 */
+
+@page {
+    size: A4;
+    margin: 2cm;
+}
+
+body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #333;
+    max-width: 210mm;
+}
+
+h1 {
+    font-size: 20pt;
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+}
+
+h2 {
+    font-size: 14pt;
+    color: #2c3e50;
+    border-bottom: 1px solid #bdc3c7;
+    padding-bottom: 4px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+h3 {
+    font-size: 12pt;
+    color: #34495e;
+    margin-top: 10px;
+    margin-bottom: 4px;
+}
+
+ul {
+    padding-left: 20px;
+}
+
+li {
+    margin-bottom: 4px;
+}
+
+strong {
+    color: #2c3e50;
+}

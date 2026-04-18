@@ -1,0 +1,144 @@
+Resume Agent P0 阶段测试数据与预期结果
+==========================================
+
+前置条件：
+1. 已配置 .env 文件中的 DEEPSEEK_API_KEY
+2. 已安装依赖：pip install -r requirements.txt
+3. 服务已启动：python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+
+==========================================
+测试 1：服务启动与健康检查
+==========================================
+
+操作：浏览器访问 http://localhost:8000
+
+预期结果：
+- 页面显示 "Resume Agent" 标题和聊天界面
+- 浏览器控制台无错误
+
+==========================================
+测试 2：API 文档访问
+==========================================
+
+操作：浏览器访问 http://localhost:8000/docs
+
+预期结果：
+- 显示 Swagger UI，包含 POST /api/chat 端点
+
+==========================================
+测试 3：SSE 流式对话（基础对话 - curl）
+==========================================
+
+操作（Windows CMD）：
+curl -N -X POST http://localhost:8000/api/chat -H "Content-Type: application/json" -d "{\"prompt\": \"你好，请介绍一下你自己\"}"
+
+操作（PowerShell）：
+Invoke-WebRequest -Uri http://localhost:8000/api/chat -Method POST -ContentType "application/json" -Body '{"prompt": "你好，请介绍一下你自己"}'
+
+预期结果：
+- 收到 SSE 格式的流式响应
+- 包含 text_delta 类型事件（逐字输出），如：data: {"type": "text_delta", "text": "你"}
+- 最后收到 assistant_turn_complete 类型事件，如：data: {"type": "assistant_turn_complete", "usage": {"input_tokens": xxx, "output_tokens": xxx}}
+- 回复内容包含"简历优化"相关描述
+
+==========================================
+测试 4：极简页面对话
+==========================================
+
+操作：
+1. 打开 http://localhost:8000
+2. 输入 "帮我优化简历" 并点击发送
+
+预期结果：
+- 用户消息显示在右侧紫色气泡
+- 助手回复逐字流式显示在左侧灰色气泡
+- 底部状态从"发送中"→"接收中"→"就绪"
+- 回复内容涉及简历优化建议
+
+==========================================
+测试 5：简历生成对话
+==========================================
+
+测试数据（在聊天输入框中输入）：
+我叫张三，有3年Python开发经验，在XX科技公司做过后端开发，熟悉FastAPI、PostgreSQL、Redis。请帮我生成一份简历。
+
+预期结果：
+- 助手生成结构化的 Markdown 简历内容
+- 包含姓名、个人简介、工作经历、技能标签等章节
+- 工作经历中使用 STAR 法则描述
+- 回复格式类似：
+  # 张三
+  ## 个人简介
+  ...
+  ## 工作经历
+  ### XX科技公司 | 后端开发 | ...
+  ## 技能标签
+  - Python、FastAPI、PostgreSQL、Redis
+
+==========================================
+测试 6：多轮对话
+==========================================
+
+测试数据（按顺序发送）：
+第1轮：我正在应聘高级Python开发工程师的岗位
+第2轮：请根据这个岗位帮我调整简历的技能标签部分
+
+预期结果：
+- 第1轮：助手理解用户的求职意向，给出建议
+- 第2轮：助手基于上下文继续优化，针对"高级Python开发"调整技能标签
+
+==========================================
+测试 7：配置校验（无 API Key 时拒绝启动）
+==========================================
+
+操作：
+1. 将 .env 中的 DEEPSEEK_API_KEY 设为空（如：DEEPSEEK_API_KEY=）
+2. 重启服务：python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+
+预期结果：
+- 服务启动失败
+- 日志输出错误信息："DeepSeek API Key 未配置。请复制 .env.example 为 .env 并填写 DEEPSEEK_API_KEY"
+
+==========================================
+测试 8：单测运行
+==========================================
+
+操作：
+cd ResumeHarness
+python -m pytest tests/ -v
+
+预期结果：
+- 所有测试通过（约 13 个测试用例）
+- 覆盖：包导入、配置加载、API Key 合并、工具定义、提示词模板、异常类型等
+- 输出示例：
+  test_package_import PASSED
+  test_config_import PASSED
+  test_exceptions_import PASSED
+  test_api_key_pool_import PASSED
+  test_session_pool_import PASSED
+  test_models_import PASSED
+  test_api_schemas_import PASSED
+  test_settings_effective_keys PASSED
+  test_settings_user_dirs PASSED
+  test_runtime_module_import PASSED
+  test_tools_import PASSED
+  test_prompts_import PASSED
+  test_memory_import PASSED
+  test_validate_api_config_with_key PASSED
+  test_validate_api_config_without_key PASSED
+
+==========================================
+已知限制（需后续修复）
+==========================================
+
+1. 工具未注册到 ToolRegistry
+   - 影响：模型无法调用 memory_write / skill_loader / web_fetch
+   - 修复方案：在 runtime.py 的 _get_shared_tool_registry() 中注册三个工具
+
+2. ApiKeyPool 未与 OpenAICompatibleClient 集成
+   - 影响：多 Key 轮询不生效，仅使用第一个 Key
+   - 修复方案：在 OpenAICompatibleClient 中集成 ApiKeyPool.acquire() / report_429()
+
+3. 会话快照未持久化
+   - 影响：服务重启后对话历史丢失
+   - 修复方案：在 _save_snapshot() 中调用 session_storage.save_session_snapshot()
