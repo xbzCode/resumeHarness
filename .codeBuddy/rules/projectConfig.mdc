@@ -1,0 +1,17 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-04-18T03:10:17.771Z
+provider: 
+---
+
+1、OpenHarness 是实现resume agent harness项目的源码参考，不应该修改其任何内容
+2、docs\缺陷修复记录.md 记录了resume agent harness 的缺陷修复记录，每当完成缺陷修复记录后你都需要更新它
+3、ResumeHarness 是实现resume agent harness项目的源码，需要修改其中的代码
+4、docs\项目架构.md 是实现resume agent harness项目的架构图，执行代码生成任务需要以其为基准
+5、docs\详细设计.md 是实现resume agent harness项目的详细设计文档，执行代码生成任务需要以其为基准
+6、docs\迭代规划.md 是实现resume agent harness项目的迭代规划文档，执行代码生成任务需要以其为基准，避免一次生成多个文件
+7、所有代码的实现都在ResumeHarness文件夹下
+8、OpenHarness 只是源码参考，不应该作为 ResumeHarness 的依赖安装
+9、docs\已实现功能.md 是实现resume agent harness项目的已实现功能文档，执行代码生成任务需要以其为基准，完成任务开发测试后需更新此文档
