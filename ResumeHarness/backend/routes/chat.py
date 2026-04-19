@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from typing import AsyncIterator
 
@@ -26,18 +27,26 @@ from resume_agent.models.sse_events import (
     SseAssistantTurnComplete,
     SseError,
     SsePing,
+    SseResumeGenerated,
     SseStatus,
     SseTextDelta,
     SseToolExecutionCompleted,
     SseToolExecutionStarted,
     format_sse_data,
 )
+from resume_agent.resume_renderer import save_resume_snapshot
 from resume_agent.runtime import RuntimeBundle
 from resume_agent.session_pool import ResumeSessionPool
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 简历内容检测正则：Markdown 中以 # 开头且包含简历相关关键词的结构
+_RESUME_PATTERN = re.compile(
+    r"^#\s+.+\n.*(?:工作经历|教育背景|技能|项目经历|个人简介|Professional Summary|Work Experience|Education|Skills)",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 def _get_session_pool(request: Request) -> ResumeSessionPool:
@@ -82,9 +91,24 @@ def _stream_event_to_sse(event: StreamEvent) -> str | None:
     return None
 
 
+def _extract_resume_content(message) -> str | None:
+    """从 assistant 消息中提取简历 Markdown 内容。
+
+    检测消息文本中是否包含简历结构（以 # 开头且包含简历关键章节）。
+    如果匹配，返回完整文本；否则返回 None。
+    """
+    text = message.text if hasattr(message, "text") else ""
+    if not text or len(text) < 100:
+        return None
+    if _RESUME_PATTERN.search(text):
+        return text
+    return None
+
+
 async def _chat_stream(
     bundle: RuntimeBundle,
     prompt: str,
+    user_id: str,
 ) -> AsyncIterator[str]:
     """生成 SSE 流式事件。"""
     try:
@@ -92,6 +116,18 @@ async def _chat_stream(
             sse_data = _stream_event_to_sse(event)
             if sse_data:
                 yield sse_data
+
+            # 当本轮对话完成时，检测是否有简历输出
+            if isinstance(event, AssistantTurnComplete) and event.message:
+                resume_md = _extract_resume_content(event.message)
+                if resume_md:
+                    try:
+                        resume_id = save_resume_snapshot(user_id, resume_md)
+                        logger.info("自动保存简历快照: user=%s resume_id=%s", user_id, resume_id)
+                        yield format_sse_data(SseResumeGenerated(resume_id=resume_id))
+                    except Exception as exc:
+                        logger.warning("保存简历快照失败: %s", exc)
+
     except Exception as exc:
         logger.error("对话流式处理异常: %s", exc, exc_info=True)
         yield format_sse_data(SseError(code=2001, message=f"对话处理失败: {exc}"))
@@ -124,7 +160,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
         )
 
     return StreamingResponse(
-        _chat_stream(bundle, request.prompt),
+        _chat_stream(bundle, request.prompt, user_id=user_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

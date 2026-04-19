@@ -182,3 +182,54 @@ def validate_api_config() -> None:
             "DeepSeek API Key 未配置。请复制 .env.example 为 .env "
             "并填写 DEEPSEEK_API_KEY，或设置环境变量 DEEPSEEK_API_KEY。"
         )
+
+
+# ---------------------------------------------------------------------------
+# 用户级 Settings
+# ---------------------------------------------------------------------------
+
+class UserSettings(BaseModel):
+    """用户级配置，可覆盖全局配置中的非敏感项。"""
+
+    # 简历模板偏好
+    default_template: str = "professional"
+
+    # 语言风格
+    language_style: str = "professional"  # professional / casual / academic
+
+    # 输出语言
+    output_language: str = "zh-CN"
+
+    # 是否自动保存简历快照
+    auto_save_resume: bool = True
+
+
+def load_user_settings(user_id: str | None = None) -> UserSettings:
+    """加载用户级配置。"""
+    settings = get_settings()
+    path = settings.get_user_settings_path(user_id)
+
+    raw: dict[str, Any] = {}
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            raw = {}
+
+    return UserSettings.model_validate(raw)
+
+
+def save_user_settings(user_id: str | None, user_settings: UserSettings) -> Path:
+    """保存用户级配置。"""
+    settings = get_settings()
+    path = settings.get_user_settings_path(user_id)
+
+    # 确保用户目录存在
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    data = user_settings.model_dump(mode="json", exclude_defaults=False)
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return path

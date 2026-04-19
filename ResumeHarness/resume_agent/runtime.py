@@ -78,6 +78,11 @@ def _get_shared_tool_registry() -> ToolRegistry:
     global _shared_tool_registry
     if _shared_tool_registry is None:
         _shared_tool_registry = ToolRegistry()
+        # 注册 P1 工具
+        from resume_agent.tools.web_fetch import WebFetchTool
+        from resume_agent.tools.memory_write import MemoryWriteTool
+        _shared_tool_registry.register(WebFetchTool())
+        _shared_tool_registry.register(MemoryWriteTool())
     return _shared_tool_registry
 
 
@@ -147,7 +152,7 @@ async def build_resume_runtime(
         permission_prompt=None,
         ask_user_prompt=None,
         hook_executor=hook_executor,
-        tool_metadata={},
+        tool_metadata={"user_id": user_id},
     )
 
     return RuntimeBundle(

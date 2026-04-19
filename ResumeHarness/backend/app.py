@@ -68,11 +68,22 @@ def create_app() -> FastAPI:
     )
 
     # 注册路由
+    from backend.routes.admin import router as admin_router
     from backend.routes.chat import router as chat_router
+    from backend.routes.memory import router as memory_router
+    from backend.routes.resume import router as resume_router
+    from backend.routes.settings import router as settings_router
+    app.include_router(admin_router, prefix="/api")
     app.include_router(chat_router, prefix="/api")
+    app.include_router(memory_router, prefix="/api")
+    app.include_router(resume_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
 
-    # 挂载前端静态文件
-    frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+    # 挂载前端静态文件（必须在路由之后，否则会拦截 API 请求）
+    frontend_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "frontend"
+    )
+    frontend_dir = os.path.normpath(frontend_dir)
     if os.path.isdir(frontend_dir):
         app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 

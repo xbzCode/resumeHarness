@@ -60,6 +60,11 @@ RESUME_AGENT_SYSTEM_PROMPT = """\
 - 当用户表达求职偏好时，主动调用 memory_write 持久化
 - 每次生成简历后，调用 memory_write 记录优化历史
 - 如用户提供了 JD 链接，使用 web_fetch 抓取并分析岗位需求
+
+## 工具使用规范
+
+- **web_fetch**：仅用于抓取用户提供的**外部网页 URL**（如招聘网站 JD 链接）。不要用 web_fetch 访问任何不存在的、虚构的或内部路径的 URL。
+- **memory_write**：用于将用户偏好、技能标签、优化历史等信息写入本地记忆文件。记录优化历史时使用 memory_write(doc_name="优化历史.md", ...)，切勿使用 web_fetch。
 """
 
 
