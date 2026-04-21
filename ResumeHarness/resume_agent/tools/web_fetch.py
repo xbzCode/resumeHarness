@@ -89,12 +89,31 @@ class WebFetchTool(BaseTool):
 def _extract_text(html: str) -> str:
     """从 HTML 中提取正文文本。
 
-    使用简易方式提取：去除标签、去除空白。后续迭代可引入 readability-lxml。
+    优先使用 readability-lxml 提取正文；若未安装则回退到正则提取。
     """
+    # 优先使用 readability-lxml
+    try:
+        from readability import Document
+        doc = Document(html)
+        summary_html = doc.summary()
+        # 去除 HTML 标签，保留纯文本
+        import re
+        text = re.sub(r"<[^>]+>", " ", summary_html)
+        text = text.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+    except ImportError:
+        pass
+
+    # 回退：简易正则提取
     import re
 
     # 去除 script/style 标签
-    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<(script|style|nav|footer|header)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    # 尝试提取 <article> 或 <main> 标签内容
+    m = re.search(r"<(?:article|main)[^>]*>(.*?)</(?:article|main)>", html, re.DOTALL | re.IGNORECASE)
+    if m:
+        text = m.group(1)
     # 去除 HTML 标签
     text = re.sub(r"<[^>]+>", " ", text)
     # 解码常见 HTML 实体

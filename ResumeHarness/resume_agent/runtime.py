@@ -63,12 +63,14 @@ def _get_shared_key_pool(settings: ResumeAgentSettings) -> ApiKeyPool:
 
 def _get_shared_api_client(settings: ResumeAgentSettings) -> OpenAICompatibleClient:
     """获取进程级 OpenAICompatibleClient 单例。"""
-    global _shared_api_client
+    global _shared_api_client, _shared_key_pool
     if _shared_api_client is None:
+        key_pool = _get_shared_key_pool(settings)
         _shared_api_client = OpenAICompatibleClient(
             api_key=settings.effective_api_keys[0],
             base_url=settings.effective_base_url,
             timeout=settings.timeout,
+            key_pool=key_pool if len(settings.effective_api_keys) > 1 else None,
         )
     return _shared_api_client
 
@@ -81,8 +83,10 @@ def _get_shared_tool_registry() -> ToolRegistry:
         # 注册 P1 工具
         from resume_agent.tools.web_fetch import WebFetchTool
         from resume_agent.tools.memory_write import MemoryWriteTool
+        from resume_agent.tools.skill_loader import SkillLoaderTool
         _shared_tool_registry.register(WebFetchTool())
         _shared_tool_registry.register(MemoryWriteTool())
+        _shared_tool_registry.register(SkillLoaderTool())
     return _shared_tool_registry
 
 

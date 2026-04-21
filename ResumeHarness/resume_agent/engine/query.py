@@ -120,11 +120,26 @@ async def run_query(
 ) -> AsyncIterator[tuple[StreamEvent, UsageSnapshot | None]]:
     """Run the conversation loop until the model stops requesting tools.
 
-    精简版：移除了 auto-compact 和 coordinator 逻辑。
+    当对话 Token 数接近阈值时自动压缩早期消息。
     """
     turn_count = 0
     while context.max_turns is None or turn_count < context.max_turns:
         turn_count += 1
+
+        # 自动压缩检查
+        if context.auto_compact_threshold_tokens and len(messages) > 4:
+            from resume_agent.services.compact import should_compact, compact_messages
+            if should_compact(messages, context.auto_compact_threshold_tokens):
+                yield StatusEvent(message=AUTO_COMPACT_STATUS_MESSAGE), None
+                try:
+                    messages[:] = await compact_messages(
+                        messages,
+                        context.api_client,
+                        context.model,
+                        keep_recent=4,
+                    )
+                except Exception as exc:
+                    log.warning("自动压缩失败，继续使用原始消息: %s", exc)
 
         final_message: ConversationMessage | None = None
         usage = UsageSnapshot()

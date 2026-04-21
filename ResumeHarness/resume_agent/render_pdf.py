@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 import re
 import logging
 from pathlib import Path
@@ -11,28 +12,69 @@ from resume_agent.exceptions import ResumeRenderError
 
 log = logging.getLogger(__name__)
 
-# Windows 系统字体目录
-_FONTS_DIR = Path("C:/Windows/Fonts")
+# 跨平台字体目录候选
+def _get_font_search_dirs() -> list[Path]:
+    """获取当前平台的字体搜索目录列表。"""
+    dirs: list[Path] = []
+    system = platform.system()
 
-# 中文字体候选
+    if system == "Windows":
+        windir = Path("C:/Windows/Fonts")
+        if windir.exists():
+            dirs.append(windir)
+    elif system == "Darwin":  # macOS
+        dirs.extend([
+            Path("/System/Library/Fonts"),
+            Path("/Library/Fonts"),
+            Path.home() / "Library" / "Fonts",
+        ])
+    else:  # Linux
+        dirs.extend([
+            Path("/usr/share/fonts"),
+            Path("/usr/local/share/fonts"),
+            Path.home() / ".fonts",
+            Path.home() / ".local" / "share" / "fonts",
+        ])
+
+    # 项目内置字体目录（最高优先级回退）
+    local_fonts = Path(__file__).parent / "templates" / "fonts"
+    if local_fonts.exists():
+        dirs.append(local_fonts)
+
+    return dirs
+
+# 中文字体候选（按优先级排列）
 _FONT_CANDIDATES = [
-    ("SimHei", "simhei.ttf"),   # 黑体
-    ("SimFang", "simfang.ttf"),  # 仿宋
-    ("SimKai", "simkai.ttf"),   # 楷体
+    ("SimHei", "simhei.ttf"),       # Windows 黑体
+    ("SimFang", "simfang.ttf"),      # Windows 仿宋
+    ("SimKai", "simkai.ttf"),       # Windows 楷体
+    ("NotoSansSC", "NotoSansSC-Regular.ttf"),  # Google 思源黑体（Linux/macOS）
+    ("NotoSansCJKsc", "NotoSansCJKsc-Regular.otf"),  # Google 思源黑体 OTF
+    ("WenQuanYiMicroHei", "wqy-microhei.ttc"),  # 文泉驿微米黑（Linux）
+    ("PingFangSC", "PingFang.ttc"),  # macOS 苹方
+    ("STHeiti", "STHeiti Light.ttc"),  # macOS 华文黑体
 ]
 
 
 def _find_chinese_font() -> tuple[str, Path]:
     """查找可用的中文 TTF 字体，返回 (注册名, 路径)。"""
+    search_dirs = _get_font_search_dirs()
+
     for name, filename in _FONT_CANDIDATES:
-        path = _FONTS_DIR / filename
-        if path.exists():
-            return name, path
-    # 项目内置字体回退
-    local_path = Path(__file__).parent / "templates" / "fonts" / "simhei.ttf"
-    if local_path.exists():
-        return "SimHei", local_path
-    raise ResumeRenderError("未找到可用的中文字体，无法生成 PDF")
+        for font_dir in search_dirs:
+            # 直接匹配
+            path = font_dir / filename
+            if path.exists():
+                return name, path
+            # 递归搜索子目录
+            for match in font_dir.rglob(filename):
+                return name, match
+
+    raise ResumeRenderError(
+        "未找到可用的中文字体，无法生成 PDF。"
+        "请安装 SimHei/NotoSansSC/WenQuanYiMicroHei 等中文字体，"
+        "或将字体文件放置到 resume_agent/templates/fonts/ 目录下。"
+    )
 
 
 def _register_font(pdf, font_name: str, font_path: Path) -> None:

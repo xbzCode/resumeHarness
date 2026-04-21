@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 
 from resume_agent.runtime import RuntimeBundle, build_resume_runtime
+from resume_agent.services.session_storage import save_session_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -167,9 +168,20 @@ class ResumeSessionPool:
 
     async def _save_snapshot(self, entry: SessionEntry) -> None:
         """保存会话快照到磁盘。"""
-        # P0 阶段：简单持久化，后续迭代完善
-        # TODO: 实现完整的会话快照持久化
-        pass
+        try:
+            bundle = entry.bundle
+            save_session_snapshot(
+                user_id=bundle.user_id,
+                model=bundle.model,
+                system_prompt=bundle.system_prompt,
+                messages=bundle.engine.messages,
+                usage=bundle.engine.total_usage,
+                session_id=bundle.session_id,
+                tool_metadata=bundle.engine.tool_metadata,
+            )
+            log.debug("保存会话快照: %s", entry.session_key)
+        except Exception as exc:
+            log.warning("保存会话快照失败 %s: %s", entry.session_key, exc)
 
     async def _eviction_loop(self) -> None:
         """定时淘汰循环（每 5 分钟）。"""

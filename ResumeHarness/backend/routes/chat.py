@@ -110,12 +110,23 @@ async def _chat_stream(
     prompt: str,
     user_id: str,
 ) -> AsyncIterator[str]:
-    """生成 SSE 流式事件。"""
+    """生成 SSE 流式事件，附带心跳保活。"""
+    import asyncio
+
+    ping_interval = 15  # 每 15 秒发送一次心跳
+    last_ping = asyncio.get_event_loop().time()
+
     try:
         async for event in bundle.engine.submit_message(prompt):
             sse_data = _stream_event_to_sse(event)
             if sse_data:
                 yield sse_data
+
+            # 心跳保活：检查是否需要发送 ping
+            now = asyncio.get_event_loop().time()
+            if now - last_ping >= ping_interval:
+                yield format_sse_data(SsePing())
+                last_ping = now
 
             # 当本轮对话完成时，检测是否有简历输出
             if isinstance(event, AssistantTurnComplete) and event.message:

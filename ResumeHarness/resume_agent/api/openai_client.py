@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from openai import AsyncOpenAI
@@ -35,6 +35,9 @@ from resume_agent.engine.messages import (
     ToolResultBlock,
     ToolUseBlock,
 )
+
+if TYPE_CHECKING:
+    from resume_agent.api_key_pool import ApiKeyPool
 
 log = logging.getLogger(__name__)
 
@@ -178,11 +181,24 @@ class OpenAICompatibleClient:
     """Client for OpenAI-compatible APIs (DeepSeek, etc.).
 
     Implements the SupportsStreamingMessages protocol.
+    Supports ApiKeyPool for multi-key rotation.
     """
 
-    def __init__(self, api_key: str, *, base_url: str | None = None, timeout: float | None = None) -> None:
-        kwargs: dict[str, Any] = {"api_key": api_key}
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        base_url: str | None = None,
+        timeout: float | None = None,
+        key_pool: ApiKeyPool | None = None,
+    ) -> None:
+        self._initial_api_key = api_key
+        self._key_pool = key_pool
+        self._current_key = api_key
         normalized_base_url = _normalize_openai_base_url(base_url)
+        self._base_url = normalized_base_url
+        self._timeout = timeout
+        kwargs: dict[str, Any] = {"api_key": api_key}
         if normalized_base_url:
             kwargs["base_url"] = normalized_base_url
         if timeout is not None:
@@ -195,6 +211,15 @@ class OpenAICompatibleClient:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
+                # 从 pool 获取可用 Key（若启用轮询）
+                if self._key_pool is not None:
+                    self._current_key = await self._key_pool.acquire()
+                    self._client = AsyncOpenAI(
+                        api_key=self._current_key,
+                        base_url=self._client.base_url,
+                        timeout=self._timeout,
+                    )
+
                 async for event in self._stream_once(request):
                     yield event
                 return
@@ -202,6 +227,12 @@ class OpenAICompatibleClient:
                 raise
             except Exception as exc:
                 last_error = exc
+
+                # 收到 429 时报告给 pool
+                status = getattr(exc, "status_code", None)
+                if status == 429 and self._key_pool is not None:
+                    self._key_pool.report_429(self._current_key)
+
                 if attempt >= MAX_RETRIES or not self._is_retryable(exc):
                     raise self._translate_error(exc) from exc
 
