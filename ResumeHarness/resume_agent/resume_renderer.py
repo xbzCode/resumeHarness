@@ -174,7 +174,7 @@ async def render_resume(
     *,
     template: str = "professional",
     output_format: str = "pdf",
-    user_id: str = "dev_user",
+    user_id: str = "",
     resume_id: str | None = None,
 ) -> tuple[bytes | str, str]:
     """渲染简历，返回 (渲染结果, resume_id)。
@@ -247,6 +247,14 @@ def save_resume_snapshot(
 
     log.info("保存简历快照: user=%s resume_id=%s", user_id, rid)
 
+    # 同步索引到 SQLite
+    _sync_resume_index_to_db(
+        user_id=user_id,
+        resume_id=rid,
+        file_path=str(path),
+        size_bytes=path.stat().st_size,
+    )
+
     # 清理超出数量限制的旧快照
     _cleanup_old_resumes(user_id)
 
@@ -317,3 +325,25 @@ def _cleanup_old_resumes(user_id: str) -> None:
     to_delete = resumes[MAX_RESUMES_PER_USER:]
     for snap in to_delete:
         delete_resume_snapshot(user_id, snap["resume_id"])
+
+
+def _sync_resume_index_to_db(
+    *,
+    user_id: str,
+    resume_id: str,
+    file_path: str,
+    size_bytes: int,
+) -> None:
+    """同步简历索引到 SQLite 数据库。"""
+    try:
+        from resume_agent.db import get_db
+
+        db = get_db()
+        db.save_resume_index(
+            user_id=user_id,
+            resume_id=resume_id,
+            file_path=file_path,
+            size_bytes=size_bytes,
+        )
+    except Exception as exc:
+        log.warning("同步简历索引到 SQLite 失败: %s", exc)

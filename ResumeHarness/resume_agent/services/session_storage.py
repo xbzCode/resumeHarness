@@ -56,6 +56,15 @@ def save_session_snapshot(
     session_path = sessions_dir / f"session-{sid}.json"
     session_path.write_text(data, encoding="utf-8")
 
+    # 同步元数据到 SQLite
+    _sync_session_meta_to_db(
+        user_id=user_id,
+        session_id=sid,
+        model=model,
+        message_count=len(messages),
+        summary=summary,
+    )
+
     return latest_path
 
 
@@ -97,3 +106,30 @@ def list_session_snapshots(user_id: str, limit: int = 20) -> list[dict[str, Any]
             break
 
     return sessions
+
+
+def _sync_session_meta_to_db(
+    *,
+    user_id: str,
+    session_id: str,
+    model: str,
+    message_count: int,
+    summary: str = "",
+) -> None:
+    """同步会话元数据到 SQLite 数据库。"""
+    try:
+        from resume_agent.db import get_db
+
+        db = get_db()
+        db.save_session_meta(
+            user_id=user_id,
+            session_id=session_id,
+            channel="web",
+            model=model,
+            message_count=message_count,
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "同步会话元数据到 SQLite 失败: %s", exc
+        )

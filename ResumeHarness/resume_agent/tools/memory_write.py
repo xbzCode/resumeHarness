@@ -47,8 +47,13 @@ class MemoryWriteTool(BaseTool):
 
     async def execute(self, arguments: MemoryWriteInput, context: ToolExecutionContext) -> ToolResult:
         """执行记忆写入。"""
-        # 从 metadata 中获取 user_id
-        user_id = context.metadata.get("user_id", "dev_user")
+        # 从 metadata 中获取 user_id（由 QueryEngine 在 tool_metadata 中注入）
+        user_id = context.metadata.get("user_id")
+        if not user_id:
+            return ToolResult(
+                output="无法确定用户身份，记忆写入失败",
+                is_error=True,
+            )
 
         if arguments.doc_name not in WRITABLE_MEMORY_FILES:
             return ToolResult(
