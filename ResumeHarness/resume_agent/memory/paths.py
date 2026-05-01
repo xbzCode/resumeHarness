@@ -7,13 +7,13 @@ from pathlib import Path
 from resume_agent.config.settings import get_settings
 
 
-def get_user_memory_dir(user_id: str | None = None) -> Path:
+def get_user_memory_dir(user_id: str) -> Path:
     """获取用户记忆目录。"""
     settings = get_settings()
     return settings.get_user_memory_dir(user_id)
 
 
-def ensure_user_dirs(user_id: str | None = None) -> Path:
+def ensure_user_dirs(user_id: str) -> Path:
     """确保用户目录结构完整，返回用户根目录。"""
     settings = get_settings()
     user_dir = settings.get_user_dir(user_id)

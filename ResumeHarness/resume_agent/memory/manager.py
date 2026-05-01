@@ -18,13 +18,13 @@ WRITABLE_MEMORY_FILES = {"职业偏好.md", "技能标签.md", "优化历史.md"
 PROTECTED_MEMORY_FILES = {"简历原文.md"}
 
 
-def list_memory_files(user_id: str | None = None) -> list[Path]:
+def list_memory_files(user_id: str) -> list[Path]:
     """列出用户记忆目录中的 markdown 文件。"""
     memory_dir = get_user_memory_dir(user_id)
     return sorted(path for path in memory_dir.glob("*.md"))
 
 
-def load_memory_prompt(user_id: str | None = None, *, max_files: int = 5) -> str | None:
+def load_memory_prompt(user_id: str, *, max_files: int = 5) -> str | None:
     """加载用户记忆内容，组装为提示词片段。"""
     memory_dir = get_user_memory_dir(user_id)
     settings = get_settings()
@@ -59,7 +59,7 @@ def load_memory_prompt(user_id: str | None = None, *, max_files: int = 5) -> str
     return "\n".join(lines)
 
 
-def add_memory_entry(user_id: str | None, title: str, content: str) -> Path:
+def add_memory_entry(user_id: str, title: str, content: str) -> Path:
     """创建一个记忆文件。"""
     memory_dir = get_user_memory_dir(user_id)
     memory_dir.mkdir(parents=True, exist_ok=True)
@@ -70,7 +70,7 @@ def add_memory_entry(user_id: str | None, title: str, content: str) -> Path:
 
 
 def write_memory_file(
-    user_id: str | None,
+    user_id: str,
     doc_name: str,
     content: str,
     mode: str = "append",
@@ -127,7 +127,7 @@ def write_memory_file(
     return path
 
 
-def read_memory_file(user_id: str | None, doc_name: str) -> str | None:
+def read_memory_file(user_id: str, doc_name: str) -> str | None:
     """读取记忆文件内容。"""
     memory_dir = get_user_memory_dir(user_id)
     path = memory_dir / doc_name

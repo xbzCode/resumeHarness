@@ -1,0 +1,257 @@
+"""JWT 认证中间件。
+
+所有 /api/* 端点（除 /api/auth/* 外）都需要携带有效的 JWT Token。
+中间件验证 Token 后将 user_id 注入 request.state.user_id。
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from fastapi import FastAPI, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+from resume_agent.exceptions import AuthenticationError, TokenExpiredError
+
+logger = logging.getLogger(__name__)
+
+# 不需要认证的路径前缀
+_PUBLIC_PATH_PREFIXES = (
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/refresh",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+)
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """JWT 认证中间件。"""
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        # 非 API 路径（前端静态文件等）直接放行
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)
+
+        # 公开路径放行
+        for prefix in _PUBLIC_PATH_PREFIXES:
+            if path.startswith(prefix):
+                return await call_next(request)
+
+        # OPTIONS 请求放行（CORS preflight）
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        # 提取 JWT Token
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return Response(
+                content='{"detail":"用户未认证","code":1001}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        token = auth_header[7:]  # 去掉 "Bearer " 前缀
+        if not token:
+            return Response(
+                content='{"detail":"用户未认证","code":1001}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        # 验证 Token
+        try:
+            payload = verify_jwt(token)
+        except TokenExpiredError:
+            return Response(
+                content='{"detail":"Token 过期","code":1002}',
+                status_code=401,
+                media_type="application/json",
+            )
+        except AuthenticationError:
+            return Response(
+                content='{"detail":"Token 无效","code":1001}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        # 注入 user_id 到 request.state
+        request.state.user_id = payload["user_id"]
+        request.state.username = payload.get("username", "")
+
+        return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# JWT 工具函数
+# ---------------------------------------------------------------------------
+
+_JWT_SECRET: str | None = None
+_JWT_ALGORITHM = "HS256"
+_JWT_EXPIRE_SECONDS = 3600 * 24 * 7  # 7 天
+_JWT_REFRESH_EXPIRE_SECONDS = 3600 * 24 * 30  # 30 天
+
+
+def _get_jwt_secret() -> str:
+    """获取或生成 JWT 签名密钥。"""
+    global _JWT_SECRET
+    if _JWT_SECRET is not None:
+        return _JWT_SECRET
+
+    import os
+    from pathlib import Path
+
+    from resume_agent.config.settings import get_settings
+
+    settings = get_settings()
+    cred_dir = settings.data_root / "credentials"
+    cred_dir.mkdir(parents=True, exist_ok=True)
+
+    secret_path = cred_dir / "jwt_secret.key"
+
+    if secret_path.exists():
+        _JWT_SECRET = secret_path.read_text(encoding="utf-8").strip()
+    else:
+        _JWT_SECRET = uuid_hex(32)
+        secret_path.write_text(_JWT_SECRET, encoding="utf-8")
+        logger.info("生成新的 JWT 密钥: %s", secret_path)
+
+    return _JWT_SECRET
+
+
+def uuid_hex(length: int = 16) -> str:
+    """生成指定长度的随机十六进制字符串。"""
+    import uuid
+    return uuid.uuid4().hex[:length]
+
+
+def create_jwt(
+    *,
+    user_id: str,
+    username: str,
+    expire_seconds: int | None = None,
+) -> str:
+    """创建 JWT Token。"""
+    import hashlib
+    import hmac
+    import json
+    import time as _time
+
+    secret = _get_jwt_secret()
+    exp = expire_seconds or _JWT_EXPIRE_SECONDS
+
+    header = {"alg": _JWT_ALGORITHM, "typ": "JWT"}
+    now = _time.time()
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "iat": int(now),
+        "exp": int(now + exp),
+    }
+
+    # Base64url 编码
+    def b64url(data: bytes) -> str:
+        import base64
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+    header_b64 = b64url(json.dumps(header, separators=(",", ":")).encode())
+    payload_b64 = b64url(json.dumps(payload, separators=(",", ":")).encode())
+
+    signing_input = f"{header_b64}.{payload_b64}"
+    signature = hmac.new(
+        secret.encode(), signing_input.encode(), hashlib.sha256
+    ).digest()
+    signature_b64 = b64url(signature)
+
+    return f"{signing_input}.{signature_b64}"
+
+
+def verify_jwt(token: str) -> dict[str, Any]:
+    """验证 JWT Token，返回 payload。"""
+    import hashlib
+    import hmac
+    import json
+    import time as _time
+
+    import base64
+
+    secret = _get_jwt_secret()
+
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise AuthenticationError("Token 格式无效")
+
+    header_b64, payload_b64, signature_b64 = parts
+
+    # 验签
+    signing_input = f"{header_b64}.{payload_b64}"
+    expected_sig = hmac.new(
+        secret.encode(), signing_input.encode(), hashlib.sha256
+    ).digest()
+
+    # Base64url 解码签名（补齐 padding）
+    sig_padding = 4 - len(signature_b64) % 4
+    if sig_padding != 4:
+        signature_b64_padded = signature_b64 + "=" * sig_padding
+    else:
+        signature_b64_padded = signature_b64
+
+    try:
+        actual_sig = base64.urlsafe_b64decode(signature_b64_padded)
+    except Exception:
+        raise AuthenticationError("Token 签名无效")
+
+    if not hmac.compare_digest(expected_sig, actual_sig):
+        raise AuthenticationError("Token 签名无效")
+
+    # 解码 payload
+    payload_padding = 4 - len(payload_b64) % 4
+    if payload_padding != 4:
+        payload_b64_padded = payload_b64 + "=" * payload_padding
+    else:
+        payload_b64_padded = payload_b64
+
+    try:
+        payload_json = base64.urlsafe_b64decode(payload_b64_padded)
+        payload = json.loads(payload_json)
+    except Exception:
+        raise AuthenticationError("Token 载荷无效")
+
+    # 检查过期
+    now = _time.time()
+    if payload.get("exp", 0) < now:
+        raise TokenExpiredError("Token 过期")
+
+    return payload
+
+
+def hash_password(password: str) -> str:
+    """对密码进行哈希。"""
+    import hashlib
+    import secrets
+
+    salt = secrets.token_hex(16)
+    hashed = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), 100000
+    ).hex()
+    return f"{salt}:{hashed}"
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """验证密码。"""
+    import hashlib
+
+    parts = password_hash.split(":", 1)
+    if len(parts) != 2:
+        return False
+
+    salt, stored_hash = parts
+    computed = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), 100000
+    ).hex()
+    return computed == stored_hash

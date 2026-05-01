@@ -9,7 +9,6 @@ from fastapi import APIRouter, Request
 
 from resume_agent.config.settings import (
     UserSettings,
-    get_settings,
     load_user_settings,
     save_user_settings,
 )
@@ -21,9 +20,8 @@ router = APIRouter(tags=["settings"])
 
 
 def _get_user_id(request: Request) -> str:
-    """获取当前用户 ID（P1 开发模式使用默认值）。"""
-    settings = get_settings()
-    return settings.effective_default_user_id
+    """获取当前用户 ID（从 JWT 认证中间件注入）。"""
+    return request.state.user_id
 
 
 @router.get("/settings")

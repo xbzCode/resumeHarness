@@ -21,9 +21,6 @@ if _env_file.exists():
 # 默认数据根目录
 DEFAULT_DATA_ROOT = Path.home() / ".resume_agent"
 
-# 开发模式默认 user_id
-DEFAULT_USER_ID = "dev_user"
-
 
 class McpServerConfig(BaseModel):
     """MCP 服务器配置。"""
@@ -63,9 +60,6 @@ class ResumeAgentSettings(BaseModel):
     # MCP 服务器配置
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
 
-    # 开发模式
-    default_user_id: str = DEFAULT_USER_ID
-
     @property
     def data_root(self) -> Path:
         """获取数据根目录。"""
@@ -97,35 +91,29 @@ class ResumeAgentSettings(BaseModel):
         """获取有效的模型名。"""
         return os.environ.get("DEEPSEEK_MODEL", "") or self.model
 
-    @property
-    def effective_default_user_id(self) -> str:
-        """获取有效的默认 user_id。"""
-        return os.environ.get("DEFAULT_USER_ID", "") or self.default_user_id
-
-    def get_user_dir(self, user_id: str | None = None) -> Path:
+    def get_user_dir(self, user_id: str) -> Path:
         """获取用户数据目录。"""
-        uid = user_id or self.effective_default_user_id
-        return self.data_root / "users" / uid
+        return self.data_root / "users" / user_id
 
-    def get_user_memory_dir(self, user_id: str | None = None) -> Path:
+    def get_user_memory_dir(self, user_id: str) -> Path:
         """获取用户记忆目录。"""
         path = self.get_user_dir(user_id) / "memory"
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def get_user_sessions_dir(self, user_id: str | None = None) -> Path:
+    def get_user_sessions_dir(self, user_id: str) -> Path:
         """获取用户会话目录。"""
         path = self.get_user_dir(user_id) / "sessions"
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def get_user_resumes_dir(self, user_id: str | None = None) -> Path:
+    def get_user_resumes_dir(self, user_id: str) -> Path:
         """获取用户简历目录。"""
         path = self.get_user_dir(user_id) / "resumes"
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def get_user_settings_path(self, user_id: str | None = None) -> Path:
+    def get_user_settings_path(self, user_id: str) -> Path:
         """获取用户级配置文件路径。"""
         return self.get_user_dir(user_id) / "settings.json"
 
@@ -204,7 +192,7 @@ class UserSettings(BaseModel):
     auto_save_resume: bool = True
 
 
-def load_user_settings(user_id: str | None = None) -> UserSettings:
+def load_user_settings(user_id: str) -> UserSettings:
     """加载用户级配置。"""
     settings = get_settings()
     path = settings.get_user_settings_path(user_id)
@@ -219,7 +207,7 @@ def load_user_settings(user_id: str | None = None) -> UserSettings:
     return UserSettings.model_validate(raw)
 
 
-def save_user_settings(user_id: str | None, user_settings: UserSettings) -> Path:
+def save_user_settings(user_id: str, user_settings: UserSettings) -> Path:
     """保存用户级配置。"""
     settings = get_settings()
     path = settings.get_user_settings_path(user_id)

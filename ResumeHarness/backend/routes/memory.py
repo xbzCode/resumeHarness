@@ -22,10 +22,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["memory"])
 
 
+def _extract_pdf_text(raw_bytes: bytes) -> str:
+    """从 PDF 字节流中提取文本内容。"""
+    import io
+
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError:
+        raise RuntimeError("PyPDF2 未安装，无法解析 PDF 文件")
+
+    reader = PdfReader(io.BytesIO(raw_bytes))
+    text_parts: list[str] = []
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text_parts.append(page_text)
+
+    return "\n\n".join(text_parts)
+
+
 def _get_user_id(request: Request) -> str:
-    """获取当前用户 ID（P1 开发模式使用默认值）。"""
-    settings = get_settings()
-    return settings.effective_default_user_id
+    """获取当前用户 ID（从 JWT 认证中间件注入）。"""
+    return request.state.user_id
 
 
 @router.get("/memory")
@@ -139,11 +157,21 @@ async def upload_resume(
     filename = file.filename or "resume.txt"
 
     if filename.endswith(".pdf"):
-        # PDF 文件暂不支持自动解析，返回提示
-        raise HTTPException(
-            status_code=400,
-            detail="暂不支持 PDF 文件自动解析，请上传 Markdown 或纯文本格式的简历",
-        )
+        # 解析 PDF 文件提取文本
+        try:
+            content = _extract_pdf_text(raw_bytes)
+            if not content.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="PDF 文件内容为空或无法提取文本，请上传 Markdown 或纯文本格式",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"PDF 文件解析失败: {exc}，建议上传 Markdown 或纯文本格式",
+            )
 
     # 将上传内容存为简历原文
     content = raw_bytes.decode("utf-8", errors="replace").strip()

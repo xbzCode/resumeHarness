@@ -8,7 +8,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
-from resume_agent.config.settings import get_settings
 from resume_agent.exceptions import ResumeNotFoundError, ResumeRenderError
 from resume_agent.resume_renderer import (
     AVAILABLE_TEMPLATES,
@@ -25,9 +24,8 @@ router = APIRouter(tags=["resume"])
 
 
 def _get_user_id(request: Request) -> str:
-    """获取当前用户 ID（P1 开发模式使用默认值）。"""
-    settings = get_settings()
-    return settings.effective_default_user_id
+    """获取当前用户 ID（从 JWT 认证中间件注入）。"""
+    return request.state.user_id
 
 
 @router.get("/resume/templates")

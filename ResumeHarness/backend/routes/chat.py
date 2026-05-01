@@ -21,8 +21,7 @@ from resume_agent.engine.stream_events import (
     ToolExecutionStarted,
 )
 
-from resume_agent.config.settings import get_settings
-from resume_agent.models.api_schemas import ChatRequest, ErrorResponse
+from resume_agent.models.api_schemas import ChatRequest
 from resume_agent.models.sse_events import (
     SseAssistantTurnComplete,
     SseError,
@@ -147,12 +146,8 @@ async def _chat_stream(
 
 @router.post("/chat")
 async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse:
-    """SSE 流式对话端点。
-
-    P0/P1 开发模式下不要求认证，使用默认 user_id dev_user。
-    """
-    settings = get_settings()
-    user_id = settings.effective_default_user_id
+    """SSE 流式对话端点。需要 JWT 认证。"""
+    user_id = http_request.state.user_id
 
     pool = _get_session_pool(http_request)
     session_id = request.session_id or uuid.uuid4().hex[:12]

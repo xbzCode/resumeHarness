@@ -194,7 +194,7 @@ OPTIMIZATION_HISTORY = """\
 def seed() -> None:
     """写入测试数据。"""
     settings = get_settings()
-    user_id = settings.effective_default_user_id
+    user_id = "test_user"
 
     print(f"=== P1 测试数据初始化 (user_id={user_id}) ===\n")
 
