@@ -7,8 +7,9 @@ import logging
 import time
 from dataclasses import dataclass
 
+from resume_agent.engine.messages import ConversationMessage
 from resume_agent.runtime import RuntimeBundle, build_resume_runtime
-from resume_agent.services.session_storage import save_session_snapshot
+from resume_agent.services.session_storage import load_session_snapshot, save_session_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +91,10 @@ class ResumeSessionPool:
                 model=model,
                 system_prompt=system_prompt,
             )
+
+            # 尝试从磁盘快照恢复历史消息
+            if session_id:
+                await self._restore_history(bundle, user_id, session_id)
 
             self._entries[session_key] = SessionEntry(
                 bundle=bundle,
@@ -182,6 +187,25 @@ class ResumeSessionPool:
             log.debug("保存会话快照: %s", entry.session_key)
         except Exception as exc:
             log.warning("保存会话快照失败 %s: %s", entry.session_key, exc)
+
+    async def _restore_history(
+        self, bundle: RuntimeBundle, user_id: str, session_id: str
+    ) -> None:
+        """从磁盘快照恢复历史消息到 bundle。"""
+        try:
+            snapshot = load_session_snapshot(user_id, session_id)
+            if snapshot is None:
+                return
+            raw_messages = snapshot.get("messages", [])
+            if not raw_messages:
+                return
+            messages = [ConversationMessage.model_validate(m) for m in raw_messages]
+            bundle.engine.load_messages(messages)
+            log.info(
+                "恢复会话历史: session_id=%s, 消息数=%d", session_id, len(messages)
+            )
+        except Exception as exc:
+            log.warning("恢复会话历史失败 session_id=%s: %s", session_id, exc)
 
     async def _eviction_loop(self) -> None:
         """定时淘汰循环（每 5 分钟）。"""

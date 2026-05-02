@@ -80,6 +80,18 @@ def load_latest_snapshot(user_id: str) -> dict[str, Any] | None:
         return None
 
 
+def load_session_snapshot(user_id: str, session_id: str) -> dict[str, Any] | None:
+    """加载指定 session_id 的会话快照。"""
+    settings = get_settings()
+    path = settings.get_user_sessions_dir(user_id) / f"session-{session_id}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def list_session_snapshots(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
     """列出用户的会话快照。"""
     settings = get_settings()
