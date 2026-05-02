@@ -74,6 +74,22 @@ class SseResumeGenerated:
 
 
 @dataclass(frozen=True)
+class SseThinkingDelta:
+    """推理/思考过程增量。"""
+
+    type: Literal["thinking_delta"] = "thinking_delta"
+    text: str = ""
+
+
+@dataclass(frozen=True)
+class SseSessionStarted:
+    """会话开始通知，携带 session_id。"""
+
+    type: Literal["session_started"] = "session_started"
+    session_id: str = ""
+
+
+@dataclass(frozen=True)
 class SseConnectionTimeout:
     """连接超时。"""
 
@@ -90,6 +106,8 @@ SseEvent = (
     | SsePing
     | SseResumeGenerated
     | SseConnectionTimeout
+    | SseThinkingDelta
+    | SseSessionStarted
 )
 
 
@@ -116,6 +134,10 @@ def sse_event_to_dict(event: SseEvent) -> dict[str, Any]:
             result["usage"] = event.usage
     elif isinstance(event, SseResumeGenerated):
         result["resume_id"] = event.resume_id
+    elif isinstance(event, SseThinkingDelta):
+        result["text"] = event.text
+    elif isinstance(event, SseSessionStarted):
+        result["session_id"] = event.session_id
     return result
 
 

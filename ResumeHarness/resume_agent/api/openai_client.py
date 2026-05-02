@@ -16,6 +16,7 @@ from openai import AsyncOpenAI
 from resume_agent.api.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,
+    ApiReasoningDeltaEvent,
     ApiRetryEvent,
     ApiStreamEvent,
     ApiTextDeltaEvent,
@@ -293,6 +294,7 @@ class OpenAICompatibleClient:
             reasoning_piece = getattr(delta, "reasoning_content", None) or ""
             if reasoning_piece:
                 collected_reasoning += reasoning_piece
+                yield ApiReasoningDeltaEvent(text=reasoning_piece)
 
             if delta.content:
                 collected_content += delta.content

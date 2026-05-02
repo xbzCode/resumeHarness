@@ -49,7 +49,14 @@ class ApiRetryEvent:
     delay_seconds: float
 
 
-ApiStreamEvent = ApiTextDeltaEvent | ApiMessageCompleteEvent | ApiRetryEvent
+@dataclass(frozen=True)
+class ApiReasoningDeltaEvent:
+    """Incremental reasoning/thinking text produced by the model."""
+
+    text: str
+
+
+ApiStreamEvent = ApiTextDeltaEvent | ApiMessageCompleteEvent | ApiRetryEvent | ApiReasoningDeltaEvent
 
 
 class SupportsStreamingMessages(Protocol):

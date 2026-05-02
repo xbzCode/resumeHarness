@@ -1,0 +1,25 @@
+
+> frontend@0.1.0 build E:\Desktop\resumeHarness\frontend
+> next build
+
+▲ Next.js 16.2.4 (Turbopack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 14.5s
+  Running TypeScript ...
+Failed to type check.
+
+./src/app/(app)/chat/page.tsx:105:7
+Type error: Type '"blob"' is not assignable to type '"json"'.
+
+  [90m103 |[0m     [36mconst[0m api = createAuthApi(token);
+  [90m104 |[0m     [36mconst[0m blob = [36mawait[0m api<[33mBlob[0m>([32m`/api/resume/[0m${resumeId[32m}/download?format=pdf`[0m, {
+[31m[1m>[0m [90m105 |[0m       responseType: [32m"blob"[0m,
+  [90m    |[0m       [31m[1m^[0m
+  [90m106 |[0m     });
+  [90m107 |[0m     [36mconst[0m url = [33mURL[0m.createObjectURL(blob);
+  [90m108 |[0m     [36mconst[0m a = document.createElement([32m"a"[0m);
+Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

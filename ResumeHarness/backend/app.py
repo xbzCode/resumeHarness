@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from backend.middleware.auth import AuthMiddleware
 from resume_agent.config.settings import get_settings, validate_api_config
@@ -94,13 +93,8 @@ def create_app() -> FastAPI:
     app.include_router(resume_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
 
-    # 挂载前端静态文件（必须在路由之后，否则会拦截 API 请求）
-    frontend_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "frontend"
-    )
-    frontend_dir = os.path.normpath(frontend_dir)
-    if os.path.isdir(frontend_dir):
-        app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    # 前端由独立的 Next.js 服务提供（P2-3 起），生产环境通过 Nginx 反向代理
+    # 不再挂载 StaticFiles
 
     return app
 

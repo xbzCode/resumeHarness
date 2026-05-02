@@ -17,6 +17,7 @@ from resume_agent.engine.stream_events import (
     ErrorEvent,
     StatusEvent,
     StreamEvent,
+    ThinkingDelta,
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
@@ -27,8 +28,10 @@ from resume_agent.models.sse_events import (
     SseError,
     SsePing,
     SseResumeGenerated,
+    SseSessionStarted,
     SseStatus,
     SseTextDelta,
+    SseThinkingDelta,
     SseToolExecutionCompleted,
     SseToolExecutionStarted,
     format_sse_data,
@@ -41,10 +44,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 简历内容检测正则：Markdown 中以 # 开头且包含简历相关关键词的结构
-_RESUME_PATTERN = re.compile(
-    r"^#\s+.+\n.*(?:工作经历|教育背景|技能|项目经历|个人简介|Professional Summary|Work Experience|Education|Skills)",
-    re.MULTILINE | re.DOTALL,
+# 简历二级章节标题（用于定位简历内容区域）
+_RESUME_SECTION_PATTERN = re.compile(
+    r"^##\s+(?:个人简介|工作经历|教育背景|技能标签?|项目经历|Professional Summary|Work Experience|Education|Skills)",
+    re.MULTILINE,
+)
+
+# 简历顶级标题（姓名行，以单个 # 开头，非 ##）
+_RESUME_TITLE_PATTERN = re.compile(
+    r"^#\s+[^#\n]+",
+    re.MULTILINE,
+)
+
+# 简历后面的非简历章节标题（优化说明、修改建议等）
+_NON_RESUME_HEADING = re.compile(
+    r"^#{1,3}\s+(?:优化说明|修改建议|改动说明|修改详情|调整说明|优化详情|优化建议|Optimization Notes|Changes|Summary of Changes)",
+    re.MULTILINE,
 )
 
 
@@ -60,6 +75,8 @@ def _stream_event_to_sse(event: StreamEvent) -> str | None:
     """将 StreamEvent 转换为 SSE 数据行。"""
     if isinstance(event, AssistantTextDelta):
         return format_sse_data(SseTextDelta(text=event.text))
+    elif isinstance(event, ThinkingDelta):
+        return format_sse_data(SseThinkingDelta(text=event.text))
     elif isinstance(event, ToolExecutionStarted):
         return format_sse_data(SseToolExecutionStarted(
             tool_name=event.tool_name,
@@ -93,24 +110,52 @@ def _stream_event_to_sse(event: StreamEvent) -> str | None:
 def _extract_resume_content(message) -> str | None:
     """从 assistant 消息中提取简历 Markdown 内容。
 
-    检测消息文本中是否包含简历结构（以 # 开头且包含简历关键章节）。
-    如果匹配，返回完整文本；否则返回 None。
+    策略：
+    1. 搜索简历特征二级章节（## 个人简介 / ## 工作经历 / ...）
+    2. 从该章节往前找最近的 # 级标题（简历姓名行）作为起点
+    3. 从起点截取到末尾
+    4. 截断非简历章节（## 优化说明 等）
     """
     text = message.text if hasattr(message, "text") else ""
     if not text or len(text) < 100:
         return None
-    if _RESUME_PATTERN.search(text):
-        return text
-    return None
+
+    # 第一步：找到简历特征章节
+    section_match = _RESUME_SECTION_PATTERN.search(text)
+    if not section_match:
+        return None
+
+    # 第二步：从该章节位置往前找 # 级标题（姓名行）
+    search_before = text[:section_match.start()]
+    title_matches = list(_RESUME_TITLE_PATTERN.finditer(search_before))
+    if title_matches:
+        # 取最后一个（最靠近章节的）# 标题
+        start_pos = title_matches[-1].start()
+    else:
+        # 没找到 # 标题，从章节本身开始
+        start_pos = section_match.start()
+
+    resume_text = text[start_pos:]
+
+    # 第三步：截断简历后面的非简历章节
+    non_resume = _NON_RESUME_HEADING.search(resume_text)
+    if non_resume and non_resume.start() > 0:
+        resume_text = resume_text[:non_resume.start()]
+
+    return resume_text.rstrip()
 
 
 async def _chat_stream(
     bundle: RuntimeBundle,
     prompt: str,
     user_id: str,
+    session_id: str,
 ) -> AsyncIterator[str]:
     """生成 SSE 流式事件，附带心跳保活。"""
     import asyncio
+
+    # 首先发送 session_id
+    yield format_sse_data(SseSessionStarted(session_id=session_id))
 
     ping_interval = 15  # 每 15 秒发送一次心跳
     last_ping = asyncio.get_event_loop().time()
@@ -166,7 +211,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
         )
 
     return StreamingResponse(
-        _chat_stream(bundle, request.prompt, user_id=user_id),
+        _chat_stream(bundle, request.prompt, user_id=user_id, session_id=session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

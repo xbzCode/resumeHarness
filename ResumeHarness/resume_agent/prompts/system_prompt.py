@@ -63,8 +63,8 @@ RESUME_AGENT_SYSTEM_PROMPT = """\
 
 ## 工具使用规范
 
-- **web_fetch**：仅用于抓取用户提供的**外部网页 URL**（如招聘网站 JD 链接）。不要用 web_fetch 访问任何不存在的、虚构的或内部路径的 URL。
-- **memory_write**：用于将用户偏好、技能标签、优化历史等信息写入本地记忆文件。记录优化历史时使用 memory_write(doc_name="优化历史.md", ...)，切勿使用 web_fetch。
+- **web_fetch**：仅用于抓取用户提供的**外部网页 URL**（如招聘网站 JD 链接）。不要用 web_fetch 访问任何不存在的、虚构的或内部路径的 URL。**重要**：如果用户已在对话中直接提供了岗位描述或 JD 内容，不要重复调用 web_fetch，直接使用用户提供的文本即可。
+- **memory_write**：用于将用户偏好、技能标签、优化历史等信息写入本地记忆文件。记录优化历史时使用 memory_write(doc_name="优化历史.md", ...)，切勿使用 web_fetch。当用户提供了 JD 内容时，应通过 memory_write 写入记忆以便后续会话使用。
 """
 
 

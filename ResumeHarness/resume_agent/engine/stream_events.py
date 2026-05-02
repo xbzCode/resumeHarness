@@ -81,6 +81,13 @@ class CompactProgressEvent:
     metadata: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class ThinkingDelta:
+    """Incremental thinking/reasoning text."""
+
+    text: str
+
+
 StreamEvent = (
     AssistantTextDelta
     | AssistantTurnComplete
@@ -89,4 +96,5 @@ StreamEvent = (
     | ErrorEvent
     | StatusEvent
     | CompactProgressEvent
+    | ThinkingDelta
 )

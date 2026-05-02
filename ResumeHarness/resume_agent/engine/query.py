@@ -15,6 +15,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 from resume_agent.api.client import (
     ApiMessageCompleteEvent,
     ApiMessageRequest,
+    ApiReasoningDeltaEvent,
     ApiRetryEvent,
     ApiTextDeltaEvent,
     SupportsStreamingMessages,
@@ -27,6 +28,7 @@ from resume_agent.engine.stream_events import (
     ErrorEvent,
     StatusEvent,
     StreamEvent,
+    ThinkingDelta,
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
@@ -156,6 +158,9 @@ async def run_query(
             ):
                 if isinstance(event, ApiTextDeltaEvent):
                     yield AssistantTextDelta(text=event.text), None
+                    continue
+                if isinstance(event, ApiReasoningDeltaEvent):
+                    yield ThinkingDelta(text=event.text), None
                     continue
                 if isinstance(event, ApiRetryEvent):
                     yield StatusEvent(

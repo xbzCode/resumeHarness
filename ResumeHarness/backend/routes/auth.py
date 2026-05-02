@@ -75,6 +75,13 @@ class ProfileResponse(BaseModel):
     created_at: float
 
 
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求。"""
+
+    old_password: str = Field(description="当前密码")
+    new_password: str = Field(min_length=6, max_length=128, description="新密码（6-128 位）")
+
+
 # ---------------------------------------------------------------------------
 # 端点
 # ---------------------------------------------------------------------------
@@ -224,3 +231,23 @@ async def get_profile(request: Request) -> Any:
         email=user.get("email", ""),
         created_at=user["created_at"],
     )
+
+
+@router.post("/change-password")
+async def change_password(body: ChangePasswordRequest, request: Request) -> dict[str, Any]:
+    """修改密码。需要 JWT 认证。"""
+    user_id = request.state.user_id
+    db = get_db()
+
+    user = db.get_user_by_user_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if not verify_password(body.old_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="当前密码错误")
+
+    new_hash = hash_password(body.new_password)
+    db.update_user_password(user_id, new_hash)
+
+    logger.info("用户修改密码: user_id=%s", user_id)
+    return {"message": "密码修改成功"}
