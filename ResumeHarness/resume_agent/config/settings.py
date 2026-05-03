@@ -43,6 +43,11 @@ DEFAULT_MCP_SERVERS: dict[str, dict[str, Any]] = {
         "url": "http://127.0.0.1:9101",
         "enabled": True,
     },
+    "jd": {
+        "type": "http",
+        "url": "http://127.0.0.1:9102",
+        "enabled": True,
+    },
 }
 
 
@@ -60,6 +65,11 @@ class ResumeAgentSettings(BaseModel):
     context_window_tokens: int | None = None
     auto_compact_threshold_tokens: int | None = None
     max_turns: int = 200
+
+    # httpx 连接池配置
+    httpx_pool_max_connections: int = 100  # 最大连接数
+    httpx_pool_max_keepalive: int = 20  # 最大 keep-alive 连接数
+    httpx_connect_timeout: float = 10.0  # 连接超时（秒）
 
     # 会话池配置
     max_sessions: int = 20

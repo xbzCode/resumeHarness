@@ -35,6 +35,8 @@ import { useChatStore } from "@/store/chat";
 import type { ResumeData } from "@/store/chat";
 import { streamChat, downloadFile, createAuthApi } from "@/lib/api";
 import { ResumePreview } from "@/components/resume-preview";
+import { ResumeScoreCard } from "@/components/resume-score-card";
+import { ResumeDiffView } from "@/components/resume-diff-view";
 import type { SessionInfo, SessionDetail, SessionMessage } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -103,6 +105,7 @@ function MessageBubble({
   templateHint,
   suggestions,
   resumePrefix,
+  resumeScore,
   isStreaming,
 }: {
   role: "user" | "assistant" | "system";
@@ -114,6 +117,8 @@ function MessageBubble({
   templateHint?: string;
   suggestions?: string;
   resumePrefix?: string;
+  resumeScore?: import("@/store/chat").ResumeScoreData;
+  prevResumeContent?: string;
   isStreaming?: boolean;
 }) {
   const isUser = role === "user";
@@ -159,6 +164,29 @@ function MessageBubble({
             {/* 简历预览组件 */}
             <div className="space-y-2">
               <ResumePreview data={resumeData} template={activeTemplate} />
+              {/* 简历评分卡片 */}
+              {resumeScore && <ResumeScoreCard score={resumeScore} />}
+              {/* 多轮优化差异对比 */}
+              {prevResumeContent && resumeData && (
+                <ResumeDiffView
+                  oldContent={prevResumeContent}
+                  newContent={(() => {
+                    const parts: string[] = [];
+                    parts.push(`# ${resumeData.name}`);
+                    const cp = [resumeData.contact.email, resumeData.contact.phone, resumeData.contact.location].filter(Boolean);
+                    if (cp.length > 0) parts.push(cp.join(" | "));
+                    if (resumeData.summary) { parts.push(""); parts.push("## 个人简介"); parts.push(resumeData.summary); }
+                    if (resumeData.experience.length > 0) {
+                      parts.push(""); parts.push("## 工作经历");
+                      for (const exp of resumeData.experience) {
+                        parts.push(`### ${exp.title} - ${exp.company}（${exp.period}）`);
+                        for (const h of exp.highlights) parts.push(`- ${h}`);
+                      }
+                    }
+                    return parts.join("\n");
+                  })()}
+                />
+              )}
               {/* 模板切换 + 操作按钮 */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex gap-1 mr-2">
@@ -353,6 +381,7 @@ export default function ChatPage() {
     setMessages,
     setResumeIdOnLastMessage,
     setResumeDataOnLastMessage,
+    setResumeScoreOnLastMessage,
   } = useChatStore();
 
   const [input, setInput] = useState("");
@@ -469,6 +498,17 @@ export default function ChatPage() {
             );
           }
           break;
+        case "resume_score":
+          if (data.overall_score !== undefined) {
+            setResumeScoreOnLastMessage({
+              overall_score: data.overall_score,
+              dimensions: data.dimensions || {},
+              suggestions: data.suggestions || [],
+              jd_keywords_matched: data.jd_keywords_matched,
+              jd_keywords_missing: data.jd_keywords_missing,
+            });
+          }
+          break;
         case "assistant_turn_complete":
           break;
         case "ping":
@@ -478,7 +518,7 @@ export default function ChatPage() {
           break;
       }
     },
-    [appendToLastMessage, appendToLastMessageThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setSessionId],
+    [appendToLastMessage, appendToLastMessageThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setResumeScoreOnLastMessage, setSessionId],
   );
 
   // 发送消息
@@ -677,6 +717,8 @@ export default function ChatPage() {
                   templateHint={msg.templateHint}
                   suggestions={msg.suggestions}
                   resumePrefix={msg.resumePrefix}
+                  resumeScore={msg.resumeScore}
+                  prevResumeContent={msg.prevResumeContent}
                   isStreaming={isLastAssistantStreaming}
                 />
               );

@@ -76,12 +76,18 @@ class McpHttpClient:
         return self._connected
 
     def _get_client(self) -> httpx.AsyncClient:
-        """获取或创建 httpx 客户端（连接复用）。"""
+        """获取或创建 httpx 客户端（连接复用，带连接池配置）。"""
         if self._client is None or self._client.is_closed:
+            from resume_agent.config.settings import get_settings
+            settings = get_settings()
             self._client = httpx.AsyncClient(
                 base_url=self._url,
                 headers=self._default_headers,
-                timeout=httpx.Timeout(_MCP_TIMEOUT),
+                timeout=httpx.Timeout(_MCP_TIMEOUT, connect=settings.httpx_connect_timeout),
+                limits=httpx.Limits(
+                    max_connections=settings.httpx_pool_max_connections,
+                    max_keepalive_connections=settings.httpx_pool_max_keepalive,
+                ),
             )
         return self._client
 

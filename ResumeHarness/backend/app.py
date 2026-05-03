@@ -89,6 +89,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("MCP 关闭异常: %s", exc)
 
+    # 关闭共享 API 客户端连接池
+    try:
+        from resume_agent.runtime import close_shared_api_client
+        await close_shared_api_client()
+    except Exception as exc:
+        logger.warning("API 客户端关闭异常: %s", exc)
+
     # 关闭会话池
     if session_pool is not None:
         await session_pool.stop()

@@ -102,6 +102,19 @@ class SseSessionStarted:
 
 
 @dataclass(frozen=True)
+class SseResumeScore:
+    """简历评分结果推送。"""
+
+    type: Literal["resume_score"] = "resume_score"
+    resume_id: str = ""
+    score: float = 0.0
+    dimensions: dict[str, Any] | None = None
+    suggestions: list[str] | None = None
+    jd_keywords_matched: list[str] | None = None
+    jd_keywords_missing: list[str] | None = None
+
+
+@dataclass(frozen=True)
 class SseConnectionTimeout:
     """连接超时。"""
 
@@ -118,6 +131,7 @@ SseEvent = (
     | SsePing
     | SseResumeGenerated
     | SseResumeData
+    | SseResumeScore
     | SseConnectionTimeout
     | SseThinkingDelta
     | SseSessionStarted
@@ -158,6 +172,17 @@ def sse_event_to_dict(event: SseEvent) -> dict[str, Any]:
             result["resume_prefix"] = event.resume_prefix
     elif isinstance(event, SseThinkingDelta):
         result["text"] = event.text
+    elif isinstance(event, SseResumeScore):
+        result["resume_id"] = event.resume_id
+        result["score"] = event.score
+        if event.dimensions is not None:
+            result["dimensions"] = event.dimensions
+        if event.suggestions is not None:
+            result["suggestions"] = event.suggestions
+        if event.jd_keywords_matched is not None:
+            result["jd_keywords_matched"] = event.jd_keywords_matched
+        if event.jd_keywords_missing is not None:
+            result["jd_keywords_missing"] = event.jd_keywords_missing
     elif isinstance(event, SseSessionStarted):
         result["session_id"] = event.session_id
     return result

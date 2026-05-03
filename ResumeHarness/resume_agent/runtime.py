@@ -71,6 +71,8 @@ def _get_shared_api_client(settings: ResumeAgentSettings) -> OpenAICompatibleCli
             base_url=settings.effective_base_url,
             timeout=settings.timeout,
             key_pool=key_pool if len(settings.effective_api_keys) > 1 else None,
+            pool_max_connections=settings.httpx_pool_max_connections,
+            pool_max_keepalive=settings.httpx_pool_max_keepalive,
         )
     return _shared_api_client
 
@@ -227,6 +229,15 @@ async def submit_message(
     async for event in bundle.engine.submit_message(prompt):
         events.append(event)
     return events
+
+
+async def close_shared_api_client() -> None:
+    """关闭共享的 API 客户端连接池。应在应用关闭时调用。"""
+    global _shared_api_client
+    if _shared_api_client is not None:
+        await _shared_api_client.aclose()
+        _shared_api_client = None
+        log.info("共享 API 客户端已关闭")
 
 
 def reset_shared_instances() -> None:

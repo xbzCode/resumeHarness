@@ -32,6 +32,7 @@ from resume_agent.models.sse_events import (
     SsePing,
     SseResumeData,
     SseResumeGenerated,
+    SseResumeScore,
     SseSessionStarted,
     SseStatus,
     SseTextDelta,
@@ -51,6 +52,19 @@ from resume_agent.session_pool import ResumeSessionPool
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _extract_jd_from_prompt(prompt: str) -> str | None:
+    """从用户 prompt 中提取 JD 相关文本（用于评分时的关键词匹配）。
+
+    如果 prompt 较长（>200字），可能包含 JD 描述，直接返回。
+    """
+    if not prompt:
+        return None
+    # 简单策略：如果 prompt 较长，可能包含 JD
+    if len(prompt) > 200:
+        return prompt
+    return None
 
 # ---------------------------------------------------------------------------
 # 简历标记分隔相关常量
@@ -387,6 +401,22 @@ async def _chat_stream(
                                 suggestions=suggestions,
                                 resume_prefix=resume_prefix,
                             ))
+
+                            # 自动评分并推送
+                            try:
+                                from resume_agent.models.resume_data import ResumeData
+                                from resume_agent.services.resume_scorer import score_resume
+
+                                rd = ResumeData.model_validate(resume_data_dict)
+                                # 从对话历史中提取最近的 JD 文本（用于关键词匹配）
+                                jd_text = _extract_jd_from_prompt(prompt)
+                                score_result = score_resume(rd, jd_text=jd_text)
+                                yield format_sse_data(SseResumeScore(
+                                    resume_id=resume_id,
+                                    **score_result.to_dict(),
+                                ))
+                            except Exception as exc:
+                                logger.debug("简历评分失败（不影响主流程）: %s", exc)
                     except Exception as exc:
                         logger.warning("保存简历快照失败: %s", exc)
 

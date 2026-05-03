@@ -1,6 +1,7 @@
 """OpenAI-compatible API client for DeepSeek and similar providers.
 
 从 OpenHarness 裁剪而来，移除了 Anthropic 特有逻辑。
+优化：多 Key 场景下为每个 Key 预创建独立的 AsyncOpenAI 客户端，避免连接泄露。
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import logging
 from typing import Any, AsyncIterator, TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
+import httpx
 from openai import AsyncOpenAI
 
 from resume_agent.api.client import (
@@ -183,6 +185,9 @@ class OpenAICompatibleClient:
 
     Implements the SupportsStreamingMessages protocol.
     Supports ApiKeyPool for multi-key rotation.
+
+    优化：多 Key 场景下为每个 Key 预创建独立的 AsyncOpenAI 客户端，
+    轮询时直接切换客户端引用，避免每次请求重建 httpx 连接池导致泄露。
     """
 
     def __init__(
@@ -192,19 +197,67 @@ class OpenAICompatibleClient:
         base_url: str | None = None,
         timeout: float | None = None,
         key_pool: ApiKeyPool | None = None,
+        pool_max_connections: int = 100,
+        pool_max_keepalive: int = 20,
     ) -> None:
         self._initial_api_key = api_key
         self._key_pool = key_pool
         self._current_key = api_key
-        normalized_base_url = _normalize_openai_base_url(base_url)
-        self._base_url = normalized_base_url
+        self._base_url = _normalize_openai_base_url(base_url)
         self._timeout = timeout
+        self._pool_max_connections = pool_max_connections
+        self._pool_max_keepalive = pool_max_keepalive
+
+        # 预创建共享的 httpx 连接池（所有 AsyncOpenAI 客户端复用）
+        self._http_client: httpx.AsyncClient | None = None
+
+        # 为每个 Key 预创建 AsyncOpenAI 客户端，避免轮询时重建
+        self._clients: dict[str, AsyncOpenAI] = {}
+        self._client = self._create_client(api_key)
+
+        # 如果启用了 Key 轮询，预创建所有 Key 的客户端
+        if key_pool is not None:
+            for key in key_pool._keys:
+                self._clients[key] = self._create_client(key)
+
+    def _create_client(self, api_key: str) -> AsyncOpenAI:
+        """创建一个 AsyncOpenAI 客户端实例（复用 httpx 连接池）。"""
         kwargs: dict[str, Any] = {"api_key": api_key}
-        if normalized_base_url:
-            kwargs["base_url"] = normalized_base_url
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        self._client = AsyncOpenAI(**kwargs)
+        if self._base_url:
+            kwargs["base_url"] = self._base_url
+        if self._timeout is not None:
+            kwargs["timeout"] = self._timeout
+
+        # 使用共享的 httpx 连接池
+        http_client = self._get_http_client()
+        kwargs["http_client"] = http_client
+
+        client = AsyncOpenAI(**kwargs)
+        self._clients[api_key] = client
+        return client
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """获取或创建共享的 httpx.AsyncClient（连接池复用）。"""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                limits=httpx.Limits(
+                    max_connections=self._pool_max_connections,
+                    max_keepalive_connections=self._pool_max_keepalive,
+                ),
+                timeout=httpx.Timeout(
+                    timeout=self._timeout or 30.0,
+                    connect=10.0,
+                ),
+            )
+        return self._http_client
+
+    async def aclose(self) -> None:
+        """关闭共享的 httpx 连接池，释放资源。应在应用关闭时调用。"""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
+        self._clients.clear()
+        log.info("OpenAICompatibleClient 连接池已关闭")
 
     async def stream_message(self, request: ApiMessageRequest) -> AsyncIterator[ApiStreamEvent]:
         """Yield text deltas and the final message, matching the client interface."""
@@ -212,14 +265,11 @@ class OpenAICompatibleClient:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                # 从 pool 获取可用 Key（若启用轮询）
+                # 从 pool 获取可用 Key（若启用轮询），切换到对应的预创建客户端
                 if self._key_pool is not None:
                     self._current_key = await self._key_pool.acquire()
-                    self._client = AsyncOpenAI(
-                        api_key=self._current_key,
-                        base_url=self._client.base_url,
-                        timeout=self._timeout,
-                    )
+                    # 直接复用预创建的客户端，无需重建
+                    self._client = self._clients.get(self._current_key, self._client)
 
                 async for event in self._stream_once(request):
                     yield event

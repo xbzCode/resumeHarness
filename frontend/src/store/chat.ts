@@ -20,6 +20,10 @@ export interface ChatMessage {
   suggestions?: string;
   /** 简历前缀内容（标记前的引导语） */
   resumePrefix?: string;
+  /** 简历评分数据（resume_score SSE 事件推送） */
+  resumeScore?: ResumeScoreData;
+  /** 上一版简历 Markdown 内容（用于多轮优化时的差异对比） */
+  prevResumeContent?: string;
 }
 
 /** 简历结构化数据（与后端 ResumeData 模型对应） */
@@ -61,6 +65,21 @@ export interface ResumeData {
   }[];
 }
 
+/** 简历评分数据（与后端 ResumeScoreResult 对应） */
+export interface ResumeScoreData {
+  overall_score: number;
+  dimensions: {
+    structure: number;
+    content: number;
+    quantification: number;
+    keyword_match: number;
+    format: number;
+  };
+  suggestions: string[];
+  jd_keywords_matched?: string[];
+  jd_keywords_missing?: string[];
+}
+
 interface ChatState {
   sessionId: string | null;
   messages: ChatMessage[];
@@ -78,6 +97,43 @@ interface ChatState {
   setMessages: (msgs: ChatMessage[]) => void;
   setResumeIdOnLastMessage: (resumeId: string) => void;
   setResumeDataOnLastMessage: (resumeId: string, data: ResumeData, templateHint: string, suggestions?: string, resumePrefix?: string) => void;
+  setResumeScoreOnLastMessage: (score: ResumeScoreData) => void;
+}
+
+/** 将 ResumeData 转换为简单 Markdown 文本（用于差异对比） */
+function _resumeDataToMarkdown(data: ResumeData): string {
+  const parts: string[] = [];
+  parts.push(`# ${data.name}`);
+  const contactParts = [data.contact.email, data.contact.phone, data.contact.location].filter(Boolean);
+  if (contactParts.length > 0) parts.push(contactParts.join(" | "));
+  if (data.summary) { parts.push(""); parts.push("## 个人简介"); parts.push(data.summary); }
+  if (data.experience.length > 0) {
+    parts.push(""); parts.push("## 工作经历");
+    for (const exp of data.experience) {
+      parts.push(`### ${exp.title} - ${exp.company}（${exp.period}）`);
+      for (const h of exp.highlights) parts.push(`- ${h}`);
+    }
+  }
+  if (data.education.length > 0) {
+    parts.push(""); parts.push("## 教育背景");
+    for (const edu of data.education) {
+      parts.push(`### ${edu.degree} - ${edu.major} - ${edu.school}（${edu.period}）`);
+      for (const a of edu.achievements) parts.push(`- ${a}`);
+    }
+  }
+  if (data.skills.length > 0) {
+    parts.push(""); parts.push("## 专业技能");
+    for (const cat of data.skills) parts.push(`- **${cat.category}**：${cat.skills.join("、")}`);
+  }
+  if (data.projects.length > 0) {
+    parts.push(""); parts.push("## 项目经历");
+    for (const proj of data.projects) {
+      parts.push(`### ${proj.name}${proj.role ? ` - ${proj.role}` : ""}${proj.period ? `（${proj.period}）` : ""}`);
+      if (proj.description) parts.push(`- 项目描述：${proj.description}`);
+      for (const c of proj.contributions) parts.push(`- ${c}`);
+    }
+  }
+  return parts.join("\n");
 }
 
 export const useChatStore = create<ChatState>()(
@@ -136,13 +192,30 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const msgs = [...state.messages];
           if (msgs.length > 0) {
+            const last = msgs[msgs.length - 1];
+            // 如果当前消息已有 resumeData，说明是多轮优化，保存上一版内容用于差异对比
+            const prevResumeContent = last.resumeData
+              ? _resumeDataToMarkdown(last.resumeData)
+              : undefined;
             msgs[msgs.length - 1] = {
-              ...msgs[msgs.length - 1],
+              ...last,
               resumeId,
               resumeData: data,
               templateHint,
               suggestions,
               resumePrefix,
+              prevResumeContent: prevResumeContent || last.prevResumeContent,
+            };
+          }
+          return { messages: msgs };
+        }),
+      setResumeScoreOnLastMessage: (score) =>
+        set((state) => {
+          const msgs = [...state.messages];
+          if (msgs.length > 0) {
+            msgs[msgs.length - 1] = {
+              ...msgs[msgs.length - 1],
+              resumeScore: score,
             };
           }
           return { messages: msgs };

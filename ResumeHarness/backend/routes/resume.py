@@ -217,3 +217,34 @@ async def delete_resume(resume_id: str, request: Request) -> dict[str, Any]:
     if not deleted:
         raise HTTPException(status_code=404, detail=f"简历不存在: {resume_id}")
     return {"deleted": True, "resume_id": resume_id}
+
+
+@router.post("/resume/{resume_id}/score")
+async def score_resume_api(
+    resume_id: str,
+    request: Request,
+    jd: str | None = None,
+) -> dict[str, Any]:
+    """对简历进行多维度评分。
+
+    Args:
+        resume_id: 简历 ID
+        jd: 可选的 JD 描述文本，用于关键词匹配评分
+    """
+    user_id = _get_user_id(request)
+
+    # 加载简历数据
+    data = load_resume_data(user_id, resume_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"简历不存在: {resume_id}")
+
+    try:
+        from resume_agent.models.resume_data import ResumeData
+        from resume_agent.services.resume_scorer import score_resume
+
+        resume_data = ResumeData.model_validate(data)
+        result = score_resume(resume_data, jd_text=jd)
+        return {"resume_id": resume_id, **result.to_dict()}
+    except Exception as exc:
+        logger.error("简历评分失败: %s", exc)
+        raise HTTPException(status_code=500, detail=f"评分失败: {exc}")
