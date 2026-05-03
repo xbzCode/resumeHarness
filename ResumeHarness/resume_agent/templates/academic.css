@@ -1,5 +1,6 @@
 /* 学术风 - academic.css */
 /* 适用于高校/研究所 */
+/* font-family 由渲染引擎统一注入，此处不再重复声明 */
 
 @page {
     size: A4;
@@ -7,7 +8,6 @@
 }
 
 body {
-    font-family: "Times New Roman", "SimSun", serif;
     font-size: 11pt;
     line-height: 1.7;
     color: #222;
@@ -19,6 +19,7 @@ h1 {
     color: #1a1a2e;
     text-align: center;
     margin-bottom: 16px;
+    margin-top: 0;
 }
 
 h2 {
@@ -37,10 +38,55 @@ h3 {
     margin-bottom: 4px;
 }
 
-ul {
+p {
+    margin-top: 4px;
+    margin-bottom: 6px;
+}
+
+ul, ol {
     padding-left: 20px;
+    margin-top: 4px;
+    margin-bottom: 6px;
 }
 
 li {
     margin-bottom: 4px;
+}
+
+/* 表格样式 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+    margin-bottom: 8px;
+}
+
+th {
+    text-align: left;
+    padding: 4px 8px;
+    background-color: #e8eaf6;
+    color: #1a1a2e;
+    font-weight: bold;
+    border: 1px solid #c5cae9;
+}
+
+td {
+    padding: 4px 8px;
+    border: 1px solid #e0e0e0;
+}
+
+/* 打印优化 */
+@media print {
+    body {
+        max-width: none;
+    }
+    h2 {
+        page-break-after: avoid;
+    }
+    h3 {
+        page-break-after: avoid;
+    }
+    li {
+        page-break-inside: avoid;
+    }
 }

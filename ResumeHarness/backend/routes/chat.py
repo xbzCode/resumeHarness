@@ -27,6 +27,7 @@ from resume_agent.models.sse_events import (
     SseAssistantTurnComplete,
     SseError,
     SsePing,
+    SseResumeData,
     SseResumeGenerated,
     SseSessionStarted,
     SseStatus,
@@ -36,7 +37,10 @@ from resume_agent.models.sse_events import (
     SseToolExecutionStarted,
     format_sse_data,
 )
-from resume_agent.resume_renderer import save_resume_snapshot
+from resume_agent.resume_renderer import (
+    parse_resume_data_from_markdown,
+    save_resume_snapshot,
+)
 from resume_agent.runtime import RuntimeBundle
 from resume_agent.session_pool import ResumeSessionPool
 
@@ -44,7 +48,33 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 简历二级章节标题（用于定位简历内容区域）
+# ---------------------------------------------------------------------------
+# 简历标记分隔相关常量
+# ---------------------------------------------------------------------------
+
+# 简历正文标记（HTML 注释风格，对 Markdown 渲染无影响）
+_RESUME_MARKER_OPEN = "<!--RESUME-->"
+_RESUME_MARKER_CLOSE = "<!--/RESUME-->"
+
+# 标记的正则匹配（主路径提取用）
+_RESUME_MARKER_PATTERN = re.compile(
+    r"<!--RESUME-->(.*?)<!--/RESUME-->",
+    re.DOTALL,
+)
+
+# 提取标记外建议内容的正则（标记之后的所有内容）
+_SUGGESTIONS_AFTER_MARKER = re.compile(
+    r"<!--/RESUME-->\s*(.*)",
+    re.DOTALL,
+)
+
+# 提取标记前的前缀内容的正则（标记之前的所有内容）
+_RESUME_PREFIX_BEFORE_MARKER = re.compile(
+    r"(.*?)<!--RESUME-->",
+    re.DOTALL,
+)
+
+# 简历二级章节标题（用于白名单降级路径定位简历内容区域）
 _RESUME_SECTION_PATTERN = re.compile(
     r"^##\s+(?:个人简介|工作经历|教育背景|技能标签?|项目经历|Professional Summary|Work Experience|Education|Skills)",
     re.MULTILINE,
@@ -56,11 +86,19 @@ _RESUME_TITLE_PATTERN = re.compile(
     re.MULTILINE,
 )
 
-# 简历后面的非简历章节标题（优化说明、修改建议等）
-_NON_RESUME_HEADING = re.compile(
-    r"^#{1,3}\s+(?:优化说明|修改建议|改动说明|修改详情|调整说明|优化详情|优化建议|Optimization Notes|Changes|Summary of Changes)",
-    re.MULTILINE,
-)
+# 白名单：已知有效的简历章节标题关键词（中英文）
+_RESUME_VALID_SECTIONS = {
+    "个人简介", "个人总结", "自我介绍", "简介", "总结",
+    "工作经历", "工作经验", "职业经历",
+    "教育背景", "教育经历", "学历",
+    "专业技能", "技能", "核心技能", "技术栈", "技能标签",
+    "项目经历", "项目经验", "核心项目",
+    "profile", "summary", "about",
+    "experience", "work experience", "employment",
+    "education", "academic",
+    "skills", "technical skills", "competencies",
+    "projects", "project experience",
+}
 
 
 def _get_session_pool(request: Request) -> ResumeSessionPool:
@@ -110,15 +148,24 @@ def _stream_event_to_sse(event: StreamEvent) -> str | None:
 def _extract_resume_content(message) -> str | None:
     """从 assistant 消息中提取简历 Markdown 内容。
 
-    策略：
-    1. 搜索简历特征二级章节（## 个人简介 / ## 工作经历 / ...）
-    2. 从该章节往前找最近的 # 级标题（简历姓名行）作为起点
-    3. 从起点截取到末尾
-    4. 截断非简历章节（## 优化说明 等）
+    双路径策略：
+    1. 标记提取（主路径）：LLM 使用 <!--RESUME--> / <!--/RESUME--> 标记时，直接提取标记间内容
+    2. 白名单过滤（降级路径）：LLM 未使用标记时，只保留已知简历章节，丢弃非简历章节
     """
     text = message.text if hasattr(message, "text") else ""
     if not text or len(text) < 100:
         return None
+
+    # ---- 主路径：标记提取 ----
+    marker_match = _RESUME_MARKER_PATTERN.search(text)
+    if marker_match:
+        resume_text = marker_match.group(1).strip()
+        if len(resume_text) >= 50:
+            logger.debug("简历提取: 使用标记分隔路径")
+            return resume_text
+
+    # ---- 降级路径：白名单过滤 ----
+    logger.debug("简历提取: 未找到标记，使用白名单过滤路径")
 
     # 第一步：找到简历特征章节
     section_match = _RESUME_SECTION_PATTERN.search(text)
@@ -129,20 +176,147 @@ def _extract_resume_content(message) -> str | None:
     search_before = text[:section_match.start()]
     title_matches = list(_RESUME_TITLE_PATTERN.finditer(search_before))
     if title_matches:
-        # 取最后一个（最靠近章节的）# 标题
         start_pos = title_matches[-1].start()
     else:
-        # 没找到 # 标题，从章节本身开始
         start_pos = section_match.start()
 
     resume_text = text[start_pos:]
 
-    # 第三步：截断简历后面的非简历章节
-    non_resume = _NON_RESUME_HEADING.search(resume_text)
-    if non_resume and non_resume.start() > 0:
-        resume_text = resume_text[:non_resume.start()]
+    # 第三步：白名单过滤——只保留已知简历章节及其内容
+    lines = resume_text.split("\n")
+    filtered_lines: list[str] = []
+    in_valid_section = True  # 头部（姓名+联系方式）始终有效
 
-    return resume_text.rstrip()
+    for line in lines:
+        h2_match = re.match(r"^##\s+(.+)$", line)
+        if h2_match:
+            section_title = h2_match.group(1).strip()
+            # 检查是否是已知简历章节
+            if section_title.lower() in {s.lower() for s in _RESUME_VALID_SECTIONS}:
+                in_valid_section = True
+                filtered_lines.append(line)
+            else:
+                in_valid_section = False
+            continue
+
+        if in_valid_section:
+            filtered_lines.append(line)
+
+    result = "\n".join(filtered_lines).strip()
+    return result if len(result) >= 100 else None
+
+
+def _extract_suggestions(message) -> str:
+    """从 assistant 消息中提取标记外的建议内容。
+
+    提取 <!--/RESUME--> 标记之后的所有文本，作为优化建议返回给前端展示。
+    """
+    text = message.text if hasattr(message, "text") else ""
+    if not text:
+        return ""
+
+    # 主路径：从标记后提取
+    marker_match = _SUGGESTIONS_AFTER_MARKER.search(text)
+    if marker_match:
+        suggestions = marker_match.group(1).strip()
+        return suggestions
+
+    # 降级路径：从白名单过滤时被丢弃的非简历章节中提取
+    # 找到第一个非简历章节及其后续内容
+    section_match = _RESUME_SECTION_PATTERN.search(text)
+    if not section_match:
+        return ""
+
+    search_before = text[:section_match.start()]
+    title_matches = list(_RESUME_TITLE_PATTERN.finditer(search_before))
+    start_pos = title_matches[-1].start() if title_matches else section_match.start()
+
+    resume_text = text[start_pos:]
+    lines = resume_text.split("\n")
+    suggestion_lines: list[str] = []
+    in_valid_section = True
+
+    for line in lines:
+        h2_match = re.match(r"^##\s+(.+)$", line)
+        if h2_match:
+            section_title = h2_match.group(1).strip()
+            if section_title.lower() in {s.lower() for s in _RESUME_VALID_SECTIONS}:
+                in_valid_section = True
+            else:
+                in_valid_section = False
+                suggestion_lines.append(line)  # 非简历章节标题
+            continue
+        if not in_valid_section:
+            suggestion_lines.append(line)
+
+    result = "\n".join(suggestion_lines).strip()
+    return result
+
+
+def _extract_resume_prefix(message) -> str:
+    """从 assistant 消息中提取标记前的前缀内容。
+
+    提取 <!--RESUME--> 标记之前的所有文本，通常是 LLM 的引导语。
+    """
+    text = message.text if hasattr(message, "text") else ""
+    if not text:
+        return ""
+
+    # 主路径：从标记前提取
+    marker_match = _RESUME_PREFIX_BEFORE_MARKER.search(text)
+    if marker_match:
+        prefix = marker_match.group(1).strip()
+        return prefix
+
+    # 降级路径：白名单过滤时，简历开始之前的文本
+    section_match = _RESUME_SECTION_PATTERN.search(text)
+    if not section_match:
+        return ""
+
+    search_before = text[:section_match.start()]
+    title_matches = list(_RESUME_TITLE_PATTERN.finditer(search_before))
+    if title_matches:
+        prefix = text[:title_matches[-1].start()].strip()
+        return prefix
+
+    return ""
+
+
+class _StreamingMarkerFilter:
+    """流式文本中过滤 <!--RESUME--> / <!--/RESUME--> 标记。
+
+    标记可能被拆分到多个 text_delta 块中，需要缓冲检测。
+    """
+
+    _MAX_MARKER_LEN = len(_RESUME_MARKER_CLOSE)  # 15
+
+    def __init__(self) -> None:
+        self._tail = ""
+
+    def feed(self, text: str) -> str:
+        """输入流式文本，返回过滤后的文本。"""
+        combined = self._tail + text
+
+        # 替换完整标记
+        combined = combined.replace(_RESUME_MARKER_OPEN, "")
+        combined = combined.replace(_RESUME_MARKER_CLOSE, "")
+
+        # 检查尾部是否可能是标记的前缀（被拆分的情况）
+        safe_end = len(combined)
+        for i in range(1, min(self._MAX_MARKER_LEN, len(combined)) + 1):
+            tail_candidate = combined[-i:]
+            if _RESUME_MARKER_OPEN.startswith(tail_candidate) or _RESUME_MARKER_CLOSE.startswith(tail_candidate):
+                safe_end = len(combined) - i
+                break
+
+        self._tail = combined[safe_end:]
+        return combined[:safe_end]
+
+    def flush(self) -> str:
+        """刷新缓冲区，返回剩余文本。"""
+        remaining = self._tail
+        self._tail = ""
+        return remaining
 
 
 async def _chat_stream(
@@ -159,12 +333,19 @@ async def _chat_stream(
 
     ping_interval = 15  # 每 15 秒发送一次心跳
     last_ping = asyncio.get_event_loop().time()
+    marker_filter = _StreamingMarkerFilter()
 
     try:
         async for event in bundle.engine.submit_message(prompt):
-            sse_data = _stream_event_to_sse(event)
-            if sse_data:
-                yield sse_data
+            # 对 text_delta 事件过滤标记标签
+            if isinstance(event, AssistantTextDelta):
+                filtered_text = marker_filter.feed(event.text)
+                if filtered_text:
+                    yield format_sse_data(SseTextDelta(text=filtered_text))
+            else:
+                sse_data = _stream_event_to_sse(event)
+                if sse_data:
+                    yield sse_data
 
             # 心跳保活：检查是否需要发送 ping
             now = asyncio.get_event_loop().time()
@@ -174,12 +355,32 @@ async def _chat_stream(
 
             # 当本轮对话完成时，检测是否有简历输出
             if isinstance(event, AssistantTurnComplete) and event.message:
+                # 刷新标记过滤器
+                remaining = marker_filter.flush()
+                if remaining:
+                    yield format_sse_data(SseTextDelta(text=remaining))
+
                 resume_md = _extract_resume_content(event.message)
                 if resume_md:
                     try:
                         resume_id = save_resume_snapshot(user_id, resume_md)
                         logger.info("自动保存简历快照: user=%s resume_id=%s", user_id, resume_id)
                         yield format_sse_data(SseResumeGenerated(resume_id=resume_id))
+
+                        # 解析并推送结构化数据，前端自动升级为组件渲染
+                        resume_data_dict = parse_resume_data_from_markdown(resume_md)
+                        if resume_data_dict:
+                            # 提取标记外的建议内容
+                            suggestions = _extract_suggestions(event.message)
+                            # 提取标记前的前缀内容
+                            resume_prefix = _extract_resume_prefix(event.message)
+                            yield format_sse_data(SseResumeData(
+                                resume_id=resume_id,
+                                data=resume_data_dict,
+                                template_hint="professional",
+                                suggestions=suggestions,
+                                resume_prefix=resume_prefix,
+                            ))
                     except Exception as exc:
                         logger.warning("保存简历快照失败: %s", exc)
 

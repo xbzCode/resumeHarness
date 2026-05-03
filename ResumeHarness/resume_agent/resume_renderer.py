@@ -1,8 +1,13 @@
-"""Markdown → PDF/HTML 渲染，带渲染队列（同时仅 1 个渲染任务）。"""
+"""简历渲染管线：Markdown → ResumeData → Jinja2 HTML 模板 → PDF/HTML。
+
+支持双格式快照持久化（ResumeData JSON + Markdown 原文），
+通过 SSE resume_data 事件推送结构化数据到前端组件渲染。
+"""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -95,29 +100,46 @@ async def _ensure_render_worker() -> None:
 # 渲染实现
 # ---------------------------------------------------------------------------
 
-def _markdown_to_html(markdown_content: str, template: str) -> str:
-    """将 Markdown 转为带 CSS 模板的 HTML（用于 HTML 预览）。"""
+def _parse_resume_data(markdown_content: str) -> Any:
+    """将 Markdown 解析为 ResumeData，解析失败返回 None。"""
+    try:
+        from resume_agent.resume_parser import parse_markdown_to_resume_data
+        data = parse_markdown_to_resume_data(markdown_content)
+        if data.has_content():
+            return data
+    except Exception as exc:
+        log.warning("ResumeData 解析失败: %s", exc)
+    return None
+
+
+def _render_html_from_resume_data(resume_data: Any, template: str) -> str:
+    """使用 Jinja2 模板渲染 ResumeData 为 HTML。"""
+    from resume_agent.render_pdf_engine import render_resume_data_to_html
+    return render_resume_data_to_html(resume_data, template)
+
+
+def _render_html_from_markdown(markdown_content: str, template: str) -> str:
+    """使用 python-markdown + CSS 渲染 HTML（降级路径）。"""
     import markdown as md_lib
 
-    # Markdown → HTML body
+    from resume_agent.render_pdf_engine import _load_css_template, _get_font_family_css
+
     html_body = md_lib.markdown(
         markdown_content,
         extensions=["tables", "fenced_code", "toc"],
     )
 
-    # 加载 CSS 模板
-    css_path = Path(__file__).parent / "templates" / f"{template}.css"
-    css_content = ""
-    if css_path.exists():
-        css_content = css_path.read_text(encoding="utf-8")
+    css_content = _load_css_template(template)
+    font_css = _get_font_family_css()
 
-    html = f"""<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Resume</title>
 <style>
+{font_css}
 {css_content}
 </style>
 </head>
@@ -125,21 +147,23 @@ def _markdown_to_html(markdown_content: str, template: str) -> str:
 {html_body}
 </body>
 </html>"""
-    return html
 
 
 async def _do_render(job: _RenderJob) -> bytes | str:
     """执行渲染。"""
     if job.output_format == "html":
-        html = _markdown_to_html(job.markdown_content, job.template)
-        return html
+        # 优先使用 ResumeData + Jinja2 模板
+        resume_data = _parse_resume_data(job.markdown_content)
+        if resume_data:
+            return _render_html_from_resume_data(resume_data, job.template)
+        # 降级到 python-markdown + CSS
+        return _render_html_from_markdown(job.markdown_content, job.template)
 
     if job.output_format == "pdf":
         async with _get_render_lock():
-            # PDF 使用 fpdf2 直接从 Markdown 渲染（不需要先转 HTML）
             loop = asyncio.get_running_loop()
             pdf_bytes = await loop.run_in_executor(
-                None, _render_pdf_sync, "", job.markdown_content, job.template,
+                None, _render_pdf_sync, job.markdown_content, job.template,
             )
             return pdf_bytes
 
@@ -149,20 +173,28 @@ async def _do_render(job: _RenderJob) -> bytes | str:
     raise ResumeRenderError(f"不支持的输出格式: {job.output_format}")
 
 
-def _render_pdf_sync(html: str, markdown_content: str, template: str) -> bytes:
+def _render_pdf_sync(markdown_content: str, template: str) -> bytes:
     """同步渲染 PDF（在线程池中执行）。
 
-    使用 fpdf2 直接从 Markdown 渲染 PDF（中文支持好，无需系统 GTK 依赖）。
+    优先使用结构化渲染（ResumeData + Jinja2），失败时降级到 Markdown 渲染。
     """
     try:
-        from resume_agent.render_pdf import render_markdown_to_pdf
-    except ImportError:
-        raise ResumeRenderError(
-            "render_pdf 模块不可用"
-        )
+        from resume_agent.render_pdf_engine import render_resume_data_to_pdf
 
-    pdf_bytes = render_markdown_to_pdf(markdown_content, template=template)
-    return bytes(pdf_bytes)
+        resume_data = _parse_resume_data(markdown_content)
+        if resume_data:
+            pdf_bytes = render_resume_data_to_pdf(resume_data, template)
+            return bytes(pdf_bytes)
+    except Exception as exc:
+        log.warning("结构化 PDF 渲染失败，降级到 Markdown 渲染: %s", exc)
+
+    # 降级到旧的 Markdown → PDF 路径
+    try:
+        from resume_agent.render_pdf_engine import render_markdown_to_pdf
+        pdf_bytes = render_markdown_to_pdf(markdown_content, template=template)
+        return bytes(pdf_bytes)
+    except ImportError:
+        raise ResumeRenderError("render_pdf_engine 模块不可用")
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +213,7 @@ async def render_resume(
 
     Args:
         markdown_content: Markdown 格式的简历内容
-        template: CSS 模板名称
+        template: 模板名称
         output_format: 输出格式 (pdf/html/markdown)
         user_id: 用户 ID
         resume_id: 简历 ID，为空时自动生成
@@ -215,6 +247,23 @@ async def render_resume(
     return result, rid
 
 
+def parse_resume_data_from_markdown(markdown_content: str) -> dict[str, Any] | None:
+    """将 Markdown 解析为 ResumeData 并返回可序列化的字典。
+
+    用于 SSE resume_data 事件推送。
+
+    Args:
+        markdown_content: Markdown 格式的简历内容
+
+    Returns:
+        ResumeData 字典，解析失败返回 None
+    """
+    resume_data = _parse_resume_data(markdown_content)
+    if resume_data is None:
+        return None
+    return resume_data.model_dump()
+
+
 def _generate_resume_id() -> str:
     """生成唯一的 resume_id。"""
     ts = time.strftime("%Y%m%d_%H%M%S")
@@ -223,7 +272,7 @@ def _generate_resume_id() -> str:
 
 
 # ---------------------------------------------------------------------------
-# 简历快照持久化
+# 简历快照持久化（双格式：JSON + Markdown）
 # ---------------------------------------------------------------------------
 
 def save_resume_snapshot(
@@ -231,9 +280,11 @@ def save_resume_snapshot(
     markdown_content: str,
     resume_id: str | None = None,
 ) -> str:
-    """保存简历快照到磁盘。
+    """保存简历快照到磁盘（双格式：ResumeData JSON + Markdown 原文）。
 
-    存储路径: ~/.resume_agent/users/{user_id}/resumes/{resume_id}.md
+    存储路径:
+    - ~/.resume_agent/users/{user_id}/resumes/{resume_id}.json  (ResumeData JSON)
+    - ~/.resume_agent/users/{user_id}/resumes/{resume_id}.md    (Markdown 原文)
 
     Returns:
         resume_id
@@ -242,17 +293,27 @@ def save_resume_snapshot(
     resumes_dir = settings.get_user_resumes_dir(user_id)
 
     rid = resume_id or _generate_resume_id()
-    path = resumes_dir / f"{rid}.md"
-    path.write_text(markdown_content, encoding="utf-8")
 
-    log.info("保存简历快照: user=%s resume_id=%s", user_id, rid)
+    # 保存 Markdown 原文
+    md_path = resumes_dir / f"{rid}.md"
+    md_path.write_text(markdown_content, encoding="utf-8")
+
+    # 解析并保存 ResumeData JSON
+    resume_data = _parse_resume_data(markdown_content)
+    if resume_data:
+        json_path = resumes_dir / f"{rid}.json"
+        json_content = resume_data.model_dump_json(indent=2)
+        json_path.write_text(json_content, encoding="utf-8")
+        log.info("保存简历快照(双格式): user=%s resume_id=%s", user_id, rid)
+    else:
+        log.warning("ResumeData 解析失败，仅保存 Markdown: user=%s resume_id=%s", user_id, rid)
 
     # 同步索引到 SQLite
     _sync_resume_index_to_db(
         user_id=user_id,
         resume_id=rid,
-        file_path=str(path),
-        size_bytes=path.stat().st_size,
+        file_path=str(md_path),
+        size_bytes=md_path.stat().st_size,
     )
 
     # 清理超出数量限制的旧快照
@@ -262,7 +323,7 @@ def save_resume_snapshot(
 
 
 def load_resume_snapshot(user_id: str, resume_id: str) -> str | None:
-    """加载简历快照内容。"""
+    """加载简历快照内容（Markdown 格式）。"""
     settings = get_settings()
     path = settings.get_user_resumes_dir(user_id) / f"{resume_id}.md"
     if not path.exists():
@@ -271,6 +332,31 @@ def load_resume_snapshot(user_id: str, resume_id: str) -> str | None:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
+
+
+def load_resume_data(user_id: str, resume_id: str) -> dict[str, Any] | None:
+    """加载简历快照的结构化数据（ResumeData JSON）。
+
+    如果 JSON 文件不存在，尝试从 Markdown 解析。
+    """
+    settings = get_settings()
+    resumes_dir = settings.get_user_resumes_dir(user_id)
+
+    # 优先加载 JSON
+    json_path = resumes_dir / f"{resume_id}.json"
+    if json_path.exists():
+        try:
+            raw = json_path.read_text(encoding="utf-8")
+            return json.loads(raw)
+        except (OSError, json.JSONDecodeError) as exc:
+            log.warning("加载 ResumeData JSON 失败: %s", exc)
+
+    # 降级：从 Markdown 解析
+    md_content = load_resume_snapshot(user_id, resume_id)
+    if md_content:
+        return parse_resume_data_from_markdown(md_content)
+
+    return None
 
 
 def list_resume_snapshots(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
@@ -286,12 +372,14 @@ def list_resume_snapshots(user_id: str, limit: int = 20) -> list[dict[str, Any]]
     ):
         try:
             stat = path.stat()
-            # 从文件名提取 resume_id
             resume_id = path.stem
+            # 检查是否有对应的 JSON 文件
+            has_json = (resumes_dir / f"{resume_id}.json").exists()
             snapshots.append({
                 "resume_id": resume_id,
                 "created_at": stat.st_mtime,
                 "size_bytes": stat.st_size,
+                "has_structured_data": has_json,
             })
         except OSError:
             continue
@@ -302,17 +390,23 @@ def list_resume_snapshots(user_id: str, limit: int = 20) -> list[dict[str, Any]]
 
 
 def delete_resume_snapshot(user_id: str, resume_id: str) -> bool:
-    """删除简历快照。"""
+    """删除简历快照（同时删除 .md 和 .json）。"""
     settings = get_settings()
-    path = settings.get_user_resumes_dir(user_id) / f"{resume_id}.md"
-    if not path.exists():
-        return False
-    try:
-        path.unlink()
+    resumes_dir = settings.get_user_resumes_dir(user_id)
+
+    deleted = False
+    for ext in [".md", ".json"]:
+        path = resumes_dir / f"{resume_id}{ext}"
+        if path.exists():
+            try:
+                path.unlink()
+                deleted = True
+            except OSError:
+                pass
+
+    if deleted:
         log.info("删除简历快照: user=%s resume_id=%s", user_id, resume_id)
-        return True
-    except OSError:
-        return False
+    return deleted
 
 
 def _cleanup_old_resumes(user_id: str) -> None:
@@ -321,7 +415,6 @@ def _cleanup_old_resumes(user_id: str) -> None:
     if len(resumes) <= MAX_RESUMES_PER_USER:
         return
 
-    # 删除最旧的
     to_delete = resumes[MAX_RESUMES_PER_USER:]
     for snap in to_delete:
         delete_resume_snapshot(user_id, snap["resume_id"])

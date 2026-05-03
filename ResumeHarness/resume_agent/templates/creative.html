@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+/* ===== 创意排版 - 卡片式布局 ===== */
+@page {
+    size: A4;
+    margin: 0;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "SimHei", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #2d3436;
+    background: #fafafa;
+}
+
+.page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 0;
+}
+
+/* ===== 头部 Hero 区域 ===== */
+.hero {
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    color: #fff;
+    padding: 32px 30px 24px;
+    position: relative;
+}
+
+.hero .name {
+    font-size: 22pt;
+    font-weight: bold;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+}
+
+.hero .contact-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 8.5pt;
+    opacity: 0.9;
+}
+
+.hero .contact-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hero .contact-icon {
+    font-size: 9pt;
+}
+
+/* ===== 内容区域 ===== */
+.content {
+    padding: 20px 28px 24px;
+}
+
+/* ===== 个人简介卡片 ===== */
+.summary-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    border-left: 4px solid #6c5ce7;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.summary-card .section-label {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #a29bfe;
+    margin-bottom: 4px;
+}
+
+.summary-card .summary-text {
+    font-size: 9.5pt;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* ===== 章节通用 ===== */
+.section {
+    margin-bottom: 16px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.section-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6c5ce7;
+}
+
+.section-title {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #6c5ce7;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* ===== 工作经历卡片 ===== */
+.card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border-left: 3px solid #a29bfe;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.card-title {
+    font-size: 10.5pt;
+    font-weight: bold;
+    color: #2d3436;
+}
+
+.card-subtitle {
+    font-size: 9pt;
+    color: #636e72;
+}
+
+.card-period {
+    font-size: 8pt;
+    color: #b2bec3;
+    background: #f3f0ff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.card-details {
+    list-style: none;
+    padding-left: 0;
+}
+
+.card-details li {
+    font-size: 9pt;
+    color: #555;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 2px;
+    line-height: 1.5;
+}
+
+.card-details li::before {
+    content: "◆";
+    position: absolute;
+    left: 0;
+    color: #a29bfe;
+    font-size: 6pt;
+    top: 3px;
+}
+
+/* ===== 教育背景 ===== */
+.edu-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.edu-card .card-header {
+    margin-bottom: 2px;
+}
+
+.edu-details {
+    list-style: none;
+    padding-left: 14px;
+}
+
+.edu-details li {
+    font-size: 8.5pt;
+    color: #636e72;
+    position: relative;
+    padding-left: 10px;
+    margin-bottom: 1px;
+}
+
+.edu-details li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: #a29bfe;
+}
+
+/* ===== 技能标签 ===== */
+.skills-container {
+    background: #fff;
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.skill-category {
+    margin-bottom: 8px;
+}
+
+.skill-cat-name {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #6c5ce7;
+    margin-bottom: 4px;
+}
+
+.skill-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.skill-tag {
+    display: inline-block;
+    font-size: 8pt;
+    color: #6c5ce7;
+    background: #f3f0ff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid #e0d6ff;
+}
+
+/* ===== 项目经历卡片 ===== */
+.proj-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border-left: 3px solid #fd79a8;
+}
+
+.proj-card .card-title {
+    color: #2d3436;
+}
+
+.proj-desc {
+    font-size: 8.5pt;
+    color: #636e72;
+    font-style: italic;
+    margin-bottom: 3px;
+}
+
+.proj-details {
+    list-style: none;
+    padding-left: 0;
+}
+
+.proj-details li {
+    font-size: 9pt;
+    color: #555;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 2px;
+    line-height: 1.5;
+}
+
+.proj-details li::before {
+    content: "◆";
+    position: absolute;
+    left: 0;
+    color: #fd79a8;
+    font-size: 6pt;
+    top: 3px;
+}
+
+/* ===== 打印优化 ===== */
+@media print {
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .card, .edu-card, .proj-card, .skills-container, .summary-card {
+        box-shadow: none;
+        border: 1px solid #eee;
+    }
+    .card, .edu-card, .proj-card {
+        page-break-inside: avoid;
+    }
+    .section-header {
+        page-break-after: avoid;
+    }
+    .skill-tag {
+        border: 1px solid #ddd;
+    }
+}
+</style>
+</head>
+<body>
+<div class="page">
+    <!-- Hero 头部 -->
+    <div class="hero">
+        <div class="name">{{ resume.name }}</div>
+        <div class="contact-row">
+            {% if resume.contact.email %}
+            <span class="contact-item"><span class="contact-icon">✉</span> {{ resume.contact.email }}</span>
+            {% endif %}
+            {% if resume.contact.phone %}
+            <span class="contact-item"><span class="contact-icon">☎</span> {{ resume.contact.phone }}</span>
+            {% endif %}
+            {% if resume.contact.location %}
+            <span class="contact-item"><span class="contact-icon">📍</span> {{ resume.contact.location }}</span>
+            {% endif %}
+            {% if resume.contact.website %}
+            <span class="contact-item"><span class="contact-icon">🌐</span> {{ resume.contact.website }}</span>
+            {% endif %}
+            {% if resume.contact.wechat %}
+            <span class="contact-item">微信: {{ resume.contact.wechat }}</span>
+            {% endif %}
+            {% if resume.contact.linkedin %}
+            <span class="contact-item">LinkedIn: {{ resume.contact.linkedin }}</span>
+            {% endif %}
+            {% if not resume.contact.email and not resume.contact.phone and resume.contact.raw_text %}
+            <span class="contact-item">{{ resume.contact.raw_text }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 内容区域 -->
+    <div class="content">
+        {% if resume.summary %}
+        <div class="summary-card">
+            <div class="section-label">个人简介</div>
+            <div class="summary-text">{{ resume.summary }}</div>
+        </div>
+        {% endif %}
+
+        {% if resume.experience %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-dot"></div>
+                <div class="section-title">工作经历</div>
+            </div>
+            {% for exp in resume.experience %}
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <span class="card-title">{{ exp.title }}</span>
+                        {% if exp.company %}<span class="card-subtitle"> — {{ exp.company }}</span>{% endif %}
+                    </div>
+                    {% if exp.period %}<span class="card-period">{{ exp.period }}</span>{% endif %}
+                </div>
+                {% if exp.highlights %}
+                <ul class="card-details">
+                    {% for h in exp.highlights %}<li>{{ h }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if resume.skills %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-dot"></div>
+                <div class="section-title">专业技能</div>
+            </div>
+            <div class="skills-container">
+                {% for cat in resume.skills %}
+                <div class="skill-category">
+                    <div class="skill-cat-name">{{ cat.category }}</div>
+                    <div class="skill-tags">
+                        {% for s in cat.skills %}
+                        <span class="skill-tag">{{ s }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if resume.education %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-dot"></div>
+                <div class="section-title">教育背景</div>
+            </div>
+            {% for edu in resume.education %}
+            <div class="edu-card">
+                <div class="card-header">
+                    <div>
+                        <span class="card-title">{{ edu.school }}</span>
+                        {% if edu.degree or edu.major %}
+                        <span class="card-subtitle">
+                            — {% if edu.degree %}{{ edu.degree }}{% endif %}{% if edu.degree and edu.major %}，{% endif %}{% if edu.major %}{{ edu.major }}{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if edu.period %}<span class="card-period">{{ edu.period }}</span>{% endif %}
+                </div>
+                {% if edu.achievements %}
+                <ul class="edu-details">
+                    {% for a in edu.achievements %}<li>{{ a }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if resume.projects %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-dot"></div>
+                <div class="section-title">项目经历</div>
+            </div>
+            {% for proj in resume.projects %}
+            <div class="proj-card">
+                <div class="card-header">
+                    <div>
+                        <span class="card-title">{{ proj.name }}</span>
+                        {% if proj.role %}<span class="card-subtitle"> — {{ proj.role }}</span>{% endif %}
+                    </div>
+                    {% if proj.period %}<span class="card-period">{{ proj.period }}</span>{% endif %}
+                </div>
+                {% if proj.description %}
+                <div class="proj-desc">{{ proj.description }}</div>
+                {% endif %}
+                {% if proj.contributions %}
+                <ul class="proj-details">
+                    {% for c in proj.contributions %}<li>{{ c }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

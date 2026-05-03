@@ -13,6 +13,7 @@ from resume_agent.resume_renderer import (
     AVAILABLE_TEMPLATES,
     delete_resume_snapshot,
     list_resume_snapshots,
+    load_resume_data,
     load_resume_snapshot,
     render_resume,
     save_resume_snapshot,
@@ -153,6 +154,25 @@ async def list_resumes(request: Request, limit: int = 20) -> dict[str, Any]:
     user_id = _get_user_id(request)
     snapshots = list_resume_snapshots(user_id, limit=limit)
     return {"resumes": snapshots}
+
+
+@router.get("/resume/{resume_id}/data")
+async def get_resume_data(resume_id: str, request: Request) -> dict[str, Any]:
+    """获取简历结构化数据（ResumeData JSON）。
+
+    用于前端组件渲染。如果 JSON 不存在，自动从 Markdown 解析。
+    """
+    user_id = _get_user_id(request)
+
+    data = load_resume_data(user_id, resume_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"简历不存在: {resume_id}")
+
+    return {
+        "resume_id": resume_id,
+        "data": data,
+        "available_templates": AVAILABLE_TEMPLATES,
+    }
 
 
 @router.delete("/resume/{resume_id}")

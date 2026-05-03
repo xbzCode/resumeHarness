@@ -12,6 +12,53 @@ export interface ChatMessage {
   toolCalls?: { name: string; args: string; result?: string }[];
   /** 简历生成事件 */
   resumeId?: string;
+  /** 简历结构化数据（resume_data SSE 事件推送） */
+  resumeData?: ResumeData;
+  /** 推荐的模板 */
+  templateHint?: string;
+  /** 优化建议（标记外的建议内容） */
+  suggestions?: string;
+  /** 简历前缀内容（标记前的引导语） */
+  resumePrefix?: string;
+}
+
+/** 简历结构化数据（与后端 ResumeData 模型对应） */
+export interface ResumeData {
+  name: string;
+  contact: {
+    email?: string;
+    phone?: string;
+    location?: string;
+    website?: string;
+    linkedin?: string;
+    wechat?: string;
+    raw_text?: string;
+  };
+  summary?: string;
+  experience: {
+    title: string;
+    company: string;
+    period: string;
+    highlights: string[];
+  }[];
+  education: {
+    degree: string;
+    major: string;
+    school: string;
+    period: string;
+    achievements: string[];
+  }[];
+  skills: {
+    category: string;
+    skills: string[];
+  }[];
+  projects: {
+    name: string;
+    role?: string;
+    period?: string;
+    description?: string;
+    contributions: string[];
+  }[];
 }
 
 interface ChatState {
@@ -30,6 +77,7 @@ interface ChatState {
   clearMessages: () => void;
   setMessages: (msgs: ChatMessage[]) => void;
   setResumeIdOnLastMessage: (resumeId: string) => void;
+  setResumeDataOnLastMessage: (resumeId: string, data: ResumeData, templateHint: string, suggestions?: string, resumePrefix?: string) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -81,6 +129,21 @@ export const useChatStore = create<ChatState>()(
           const msgs = [...state.messages];
           if (msgs.length > 0) {
             msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], resumeId };
+          }
+          return { messages: msgs };
+        }),
+      setResumeDataOnLastMessage: (resumeId, data, templateHint, suggestions, resumePrefix) =>
+        set((state) => {
+          const msgs = [...state.messages];
+          if (msgs.length > 0) {
+            msgs[msgs.length - 1] = {
+              ...msgs[msgs.length - 1],
+              resumeId,
+              resumeData: data,
+              templateHint,
+              suggestions,
+              resumePrefix,
+            };
           }
           return { messages: msgs };
         }),

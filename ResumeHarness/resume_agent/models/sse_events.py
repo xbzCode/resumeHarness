@@ -74,6 +74,18 @@ class SseResumeGenerated:
 
 
 @dataclass(frozen=True)
+class SseResumeData:
+    """简历结构化数据推送，前端收到后自动升级为组件渲染。"""
+
+    type: Literal["resume_data"] = "resume_data"
+    resume_id: str = ""
+    data: dict[str, Any] | None = None
+    template_hint: str = "professional"
+    suggestions: str = ""
+    resume_prefix: str = ""
+
+
+@dataclass(frozen=True)
 class SseThinkingDelta:
     """推理/思考过程增量。"""
 
@@ -105,6 +117,7 @@ SseEvent = (
     | SseAssistantTurnComplete
     | SsePing
     | SseResumeGenerated
+    | SseResumeData
     | SseConnectionTimeout
     | SseThinkingDelta
     | SseSessionStarted
@@ -134,6 +147,15 @@ def sse_event_to_dict(event: SseEvent) -> dict[str, Any]:
             result["usage"] = event.usage
     elif isinstance(event, SseResumeGenerated):
         result["resume_id"] = event.resume_id
+    elif isinstance(event, SseResumeData):
+        result["resume_id"] = event.resume_id
+        if event.data is not None:
+            result["data"] = event.data
+        result["template_hint"] = event.template_hint
+        if event.suggestions:
+            result["suggestions"] = event.suggestions
+        if event.resume_prefix:
+            result["resume_prefix"] = event.resume_prefix
     elif isinstance(event, SseThinkingDelta):
         result["text"] = event.text
     elif isinstance(event, SseSessionStarted):

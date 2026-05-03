@@ -32,7 +32,9 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useChatStore } from "@/store/chat";
+import type { ResumeData } from "@/store/chat";
 import { streamChat, downloadFile, createAuthApi } from "@/lib/api";
+import { ResumePreview } from "@/components/resume-preview";
 import type { SessionInfo, SessionDetail, SessionMessage } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -97,6 +99,10 @@ function MessageBubble({
   thinking,
   toolCalls,
   resumeId,
+  resumeData,
+  templateHint,
+  suggestions,
+  resumePrefix,
   isStreaming,
 }: {
   role: "user" | "assistant" | "system";
@@ -104,9 +110,20 @@ function MessageBubble({
   thinking?: string;
   toolCalls?: { name: string; args: string; result?: string }[];
   resumeId?: string;
+  resumeData?: ResumeData;
+  templateHint?: string;
+  suggestions?: string;
+  resumePrefix?: string;
   isStreaming?: boolean;
 }) {
   const isUser = role === "user";
+  const [showPreview, setShowPreview] = useState(true);
+  const [activeTemplate, setActiveTemplate] = useState(templateHint || "professional");
+
+  // 当 templateHint 变化时同步
+  useEffect(() => {
+    if (templateHint) setActiveTemplate(templateHint);
+  }, [templateHint]);
 
   return (
     <div className={cn("flex gap-3 px-4 py-3", isUser ? "justify-end" : "justify-start")}>
@@ -131,10 +148,111 @@ function MessageBubble({
             ))}
           </div>
         )}
-        <div className="prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-        </div>
-        {resumeId && (
+        {resumeData && showPreview ? (
+          <>
+            {/* 前缀内容（标记前的引导语等） */}
+            {resumePrefix && (
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{resumePrefix}</ReactMarkdown>
+              </div>
+            )}
+            {/* 简历预览组件 */}
+            <div className="space-y-2">
+              <ResumePreview data={resumeData} template={activeTemplate} />
+              {/* 模板切换 + 操作按钮 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex gap-1 mr-2">
+                  {(["professional", "academic", "creative"] as const).map((tpl) => (
+                    <Button
+                      key={tpl}
+                      variant={activeTemplate === tpl ? "default" : "outline"}
+                      size="sm"
+                      className="gap-1 text-xs"
+                      onClick={() => setActiveTemplate(tpl)}
+                    >
+                      {tpl === "professional" ? "商务" : tpl === "academic" ? "学术" : "创意"}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setShowPreview(false)}
+                >
+                  查看原文
+                </Button>
+                {resumeId && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => window.open(`/resumes/${resumeId}`, "_blank")}
+                    >
+                      <FileText className="h-3 w-3" />
+                      详情
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => handleDownloadResume(resumeId)}
+                    >
+                      <Download className="h-3 w-3" />
+                      下载 PDF
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* 后缀内容（优化建议等） */}
+            {suggestions && (
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{suggestions}</ReactMarkdown>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        )}
+        {resumeData && !showPreview && (
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => setShowPreview(true)}
+            >
+              简历预览
+            </Button>
+            {resumeId && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => window.open(`/resumes/${resumeId}`, "_blank")}
+                >
+                  <FileText className="h-3 w-3" />
+                  详情
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => handleDownloadResume(resumeId)}
+                >
+                  <Download className="h-3 w-3" />
+                  下载 PDF
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+        {!resumeData && resumeId && (
           <div className="flex gap-2 pt-2">
             <Button
               variant="outline"
@@ -234,6 +352,7 @@ export default function ChatPage() {
     clearMessages,
     setMessages,
     setResumeIdOnLastMessage,
+    setResumeDataOnLastMessage,
   } = useChatStore();
 
   const [input, setInput] = useState("");
@@ -339,6 +458,17 @@ export default function ChatPage() {
           setResumeIdOnLastMessage(data.resume_id);
           toast.success("简历已生成！");
           break;
+        case "resume_data":
+          if (data.resume_id && data.data) {
+            setResumeDataOnLastMessage(
+              data.resume_id,
+              data.data,
+              data.template_hint || "professional",
+              data.suggestions || "",
+              data.resume_prefix || "",
+            );
+          }
+          break;
         case "assistant_turn_complete":
           break;
         case "ping":
@@ -348,7 +478,7 @@ export default function ChatPage() {
           break;
       }
     },
-    [appendToLastMessage, appendToLastMessageThinking, setResumeIdOnLastMessage, setSessionId],
+    [appendToLastMessage, appendToLastMessageThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setSessionId],
   );
 
   // 发送消息
@@ -543,6 +673,10 @@ export default function ChatPage() {
                   thinking={msg.thinking}
                   toolCalls={msg.toolCalls}
                   resumeId={msg.resumeId}
+                  resumeData={msg.resumeData}
+                  templateHint={msg.templateHint}
+                  suggestions={msg.suggestions}
+                  resumePrefix={msg.resumePrefix}
                   isStreaming={isLastAssistantStreaming}
                 />
               );
