@@ -70,6 +70,7 @@ class ResumeSessionPool:
         channel: str = "web",
         model: str | None = None,
         system_prompt: str | None = None,
+        latest_user_prompt: str | None = None,
     ) -> RuntimeBundle:
         """获取已有会话或创建新会话。"""
         session_key = self.make_session_key(channel, user_id, session_id)
@@ -90,6 +91,7 @@ class ResumeSessionPool:
                 session_id=session_id,
                 model=model,
                 system_prompt=system_prompt,
+                latest_user_prompt=latest_user_prompt,
             )
 
             # 尝试从磁盘快照恢复历史消息

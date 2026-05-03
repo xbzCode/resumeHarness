@@ -38,6 +38,7 @@ from resume_agent.models.sse_events import (
     format_sse_data,
 )
 from resume_agent.resume_renderer import (
+    get_template_hint,
     parse_resume_data_from_markdown,
     save_resume_snapshot,
 )
@@ -374,10 +375,12 @@ async def _chat_stream(
                             suggestions = _extract_suggestions(event.message)
                             # 提取标记前的前缀内容
                             resume_prefix = _extract_resume_prefix(event.message)
+                            # 根据简历内容智能推荐模板
+                            template_hint = get_template_hint(jd_text=resume_md)
                             yield format_sse_data(SseResumeData(
                                 resume_id=resume_id,
                                 data=resume_data_dict,
-                                template_hint="professional",
+                                template_hint=template_hint,
                                 suggestions=suggestions,
                                 resume_prefix=resume_prefix,
                             ))
@@ -403,6 +406,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
             user_id=user_id,
             session_id=session_id,
             channel="web",
+            latest_user_prompt=request.prompt,
         )
     except Exception as exc:
         logger.error("创建会话失败: %s", exc)

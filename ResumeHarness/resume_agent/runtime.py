@@ -110,6 +110,7 @@ async def build_resume_runtime(
     session_id: str | None = None,
     model: str | None = None,
     system_prompt: str | None = None,
+    latest_user_prompt: str | None = None,
     extra_skill_dirs: tuple[str, ...] = (),
 ) -> RuntimeBundle:
     """构建精简版 RuntimeBundle，跳过本地工具和 MCP stdio。
@@ -133,7 +134,7 @@ async def build_resume_runtime(
     effective_prompt = system_prompt
     if effective_prompt is None:
         from resume_agent.prompts import build_resume_system_prompt
-        effective_prompt = await build_resume_system_prompt(user_id)
+        effective_prompt = await build_resume_system_prompt(user_id, latest_user_prompt=latest_user_prompt)
 
     # 获取共享单例
     api_client = _get_shared_api_client(settings)

@@ -22,6 +22,63 @@ log = logging.getLogger(__name__)
 # 可用模板列表
 AVAILABLE_TEMPLATES = ["professional", "academic", "creative"]
 
+# 行业→模板推荐映射
+# 根据行业/岗位特征推荐最合适的简历模板
+INDUSTRY_TEMPLATE_MAP: dict[str, str] = {
+    "tech": "professional",       # 互联网/科技 → 商务双栏
+    "internet": "professional",   # 互联网 → 商务双栏
+    "finance": "academic",        # 金融 → 学术单栏
+    "banking": "academic",        # 银行 → 学术单栏
+    "education": "academic",      # 教育 → 学术单栏
+    "academic": "academic",       # 学术 → 学术单栏
+    "design": "creative",         # 设计 → 创意卡片
+    "marketing": "creative",      # 市场/营销 → 创意卡片
+    "media": "creative",          # 媒体 → 创意卡片
+    "healthcare": "academic",     # 医疗 → 学术单栏
+    "government": "academic",     # 政府/公共事业 → 学术单栏
+    "manufacturing": "professional",  # 制造业 → 商务双栏
+    "consulting": "professional",     # 咨询 → 商务双栏
+    "legal": "academic",          # 法律 → 学术单栏
+}
+
+# 岗位关键词→行业映射
+# 用于从 JD 或简历内容中推断所属行业
+JOB_KEYWORD_INDUSTRIES: dict[str, str] = {
+    # 互联网/科技
+    "前端": "tech", "后端": "tech", "全栈": "tech", "算法": "tech",
+    "开发": "tech", "架构": "tech", "测试": "tech", "运维": "tech",
+    "SRE": "tech", "DevOps": "tech", "数据": "tech", "AI": "tech",
+    "机器学习": "tech", "深度学习": "tech", "NLP": "tech", "CV": "tech",
+    "产品经理": "tech", "程序员": "tech", "工程师": "tech",
+    "React": "tech", "Vue": "tech", "Java": "tech", "Python": "tech",
+    "Go": "tech", "TypeScript": "tech", "Kubernetes": "tech",
+    # 金融
+    "风控": "finance", "信贷": "finance", "合规": "finance",
+    "投行": "finance", "证券": "finance", "基金": "finance",
+    "精算": "finance", "CFA": "finance", "CPA": "finance", "FRM": "finance",
+    "银行": "finance", "保险": "finance", "资管": "finance",
+    "交易": "finance", "清算": "finance", "KYC": "finance", "AML": "finance",
+    # 教育
+    "教师": "education", "教授": "education", "讲师": "education",
+    "教研": "education", "课程": "education", "教学": "education",
+    "K12": "education", "高校": "education", "学术": "education",
+    # 设计/市场
+    "设计师": "design", "UI": "design", "UX": "design",
+    "视觉": "design", "交互": "design", "品牌": "marketing",
+    "运营": "marketing", "市场": "marketing", "营销": "marketing",
+    "增长": "marketing", "广告": "marketing", "PR": "marketing",
+    # 医疗
+    "医生": "healthcare", "临床": "healthcare", "护士": "healthcare",
+    "医药": "healthcare", "医疗": "healthcare", "GMP": "healthcare",
+    # 制造
+    "生产": "manufacturing", "工艺": "manufacturing", "供应链": "manufacturing",
+    "质量": "manufacturing", "MES": "manufacturing", "ERP": "manufacturing",
+    # 法律
+    "律师": "legal", "法务": "legal", "合规审查": "legal",
+    # 咨询
+    "咨询": "consulting", "顾问": "consulting", "战略": "consulting",
+}
+
 # 渲染超时（秒）
 RENDER_TIMEOUT = 60
 
@@ -440,3 +497,102 @@ def _sync_resume_index_to_db(
         )
     except Exception as exc:
         log.warning("同步简历索引到 SQLite 失败: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# 行业识别与模板推荐
+# ---------------------------------------------------------------------------
+
+def detect_industry_from_text(text: str) -> str | None:
+    """从文本（JD 或简历内容）中识别行业类型。
+
+    通过关键词匹配推断最可能的行业。
+
+    Args:
+        text: JD 或简历的文本内容
+
+    Returns:
+        行业标识符（如 "tech"、"finance"），无法识别时返回 None
+    """
+    if not text:
+        return None
+
+    text_lower = text.lower()
+    industry_scores: dict[str, int] = {}
+
+    for keyword, industry in JOB_KEYWORD_INDUSTRIES.items():
+        # 不区分大小写匹配
+        count = text_lower.count(keyword.lower())
+        if count > 0:
+            industry_scores[industry] = industry_scores.get(industry, 0) + count
+
+    if not industry_scores:
+        return None
+
+    # 返回得分最高的行业
+    best_industry = max(industry_scores, key=industry_scores.get)  # type: ignore[arg-type]
+    return best_industry
+
+
+def get_template_hint(industry: str | None = None, jd_text: str | None = None) -> str:
+    """根据行业或 JD 内容推荐最佳简历模板。
+
+    优先级：
+    1. 直接传入的 industry 参数
+    2. 从 jd_text 推断的行业
+    3. 默认返回 "professional"
+
+    Args:
+        industry: 行业标识符（如 "tech"、"finance"），可选
+        jd_text: JD 文本内容，用于推断行业，可选
+
+    Returns:
+        推荐的模板名称
+    """
+    # 优先使用直接传入的行业
+    effective_industry = industry
+
+    # 如果没有直接传入行业，尝试从 JD 推断
+    if not effective_industry and jd_text:
+        effective_industry = detect_industry_from_text(jd_text)
+
+    # 根据行业映射返回模板
+    if effective_industry and effective_industry in INDUSTRY_TEMPLATE_MAP:
+        return INDUSTRY_TEMPLATE_MAP[effective_industry]
+
+    # 默认返回商务模板
+    return "professional"
+
+
+def get_industry_skill_name(industry: str | None = None, jd_text: str | None = None) -> str | None:
+    """根据行业或 JD 内容推荐应加载的行业技能文件名。
+
+    Args:
+        industry: 行业标识符（如 "tech"、"finance"），可选
+        jd_text: JD 文本内容，用于推断行业，可选
+
+    Returns:
+        技能文件名（不含 .md 后缀），如 "resume-tech"，无匹配时返回 None
+    """
+    # 行业→技能文件映射
+    industry_skill_map: dict[str, str] = {
+        "tech": "resume-tech",
+        "internet": "resume-tech",
+        "finance": "resume-finance",
+        "banking": "resume-finance",
+        "insurance": "resume-finance",
+    }
+
+    effective_industry = industry
+
+    if not effective_industry and jd_text:
+        effective_industry = detect_industry_from_text(jd_text)
+
+    if effective_industry and effective_industry in industry_skill_map:
+        skill_name = industry_skill_map[effective_industry]
+        # 检查技能文件是否存在
+        skill_path = Path(__file__).parent / "skills" / f"{skill_name}.md"
+        if skill_path.exists():
+            return skill_name
+
+    return None

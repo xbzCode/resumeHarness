@@ -11,7 +11,10 @@ from fastapi.responses import Response
 from resume_agent.exceptions import ResumeNotFoundError, ResumeRenderError
 from resume_agent.resume_renderer import (
     AVAILABLE_TEMPLATES,
+    INDUSTRY_TEMPLATE_MAP,
     delete_resume_snapshot,
+    detect_industry_from_text,
+    get_template_hint,
     list_resume_snapshots,
     load_resume_data,
     load_resume_snapshot,
@@ -50,6 +53,37 @@ async def get_resume_templates() -> dict[str, Any]:
                 "description": "适用于设计/市场",
             },
         ]
+    }
+
+
+@router.get("/resume/template-hint")
+async def get_template_hint_api(
+    request: Request,
+    jd: str | None = None,
+    industry: str | None = None,
+) -> dict[str, Any]:
+    """根据岗位描述或行业推荐最佳简历模板。
+
+    Args:
+        jd: 岗位描述文本（URL encode），用于推断行业
+        industry: 行业标识符（如 "tech"、"finance"），优先于 JD 推断
+
+    Returns:
+        推荐的模板名称、识别出的行业、行业→模板映射关系
+    """
+    # 推断行业
+    detected_industry = industry
+    if not detected_industry and jd:
+        detected_industry = detect_industry_from_text(jd)
+
+    # 获取模板推荐
+    template = get_template_hint(industry=detected_industry, jd_text=jd)
+
+    return {
+        "template_hint": template,
+        "detected_industry": detected_industry,
+        "industry_template_map": INDUSTRY_TEMPLATE_MAP,
+        "available_templates": AVAILABLE_TEMPLATES,
     }
 
 
