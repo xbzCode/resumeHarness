@@ -10,6 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.middleware.auth import AuthMiddleware
+from backend.middleware.monitoring import MonitoringMiddleware
+from backend.middleware.rate_limit import RateLimitMiddleware
 from resume_agent.config.settings import get_settings, validate_api_config
 from resume_agent.db import close_db, get_db
 from resume_agent.session_pool import ResumeSessionPool
@@ -18,6 +20,20 @@ logger = logging.getLogger(__name__)
 
 # 全局会话池
 session_pool: ResumeSessionPool | None = None
+
+# 全局中间件引用（供状态查询 API 使用）
+_rate_limit_middleware: RateLimitMiddleware | None = None
+_monitoring_middleware: MonitoringMiddleware | None = None
+
+
+def get_rate_limit_middleware() -> RateLimitMiddleware | None:
+    """获取速率限制中间件实例。"""
+    return _rate_limit_middleware
+
+
+def get_monitoring_middleware() -> MonitoringMiddleware | None:
+    """获取监控中间件实例。"""
+    return _monitoring_middleware
 
 
 @asynccontextmanager
@@ -37,6 +53,14 @@ async def lifespan(app: FastAPI):
     db = get_db()
     logger.info("数据库已初始化")
 
+    # 初始化 MCP 工具
+    try:
+        from resume_agent.runtime import init_mcp_tools, shutdown_mcp
+        mcp_count = await init_mcp_tools()
+        logger.info("MCP 工具初始化完成，注册 %d 个工具", mcp_count)
+    except Exception as exc:
+        logger.warning("MCP 工具初始化失败（不影响主服务）: %s", exc)
+
     # 启动会话池
     settings = get_settings()
     session_pool = ResumeSessionPool(
@@ -46,7 +70,24 @@ async def lifespan(app: FastAPI):
     await session_pool.start()
     logger.info("会话池已启动 (max=%d, idle_timeout=%ds)", settings.max_sessions, settings.idle_timeout)
 
+    # 启动监控定期日志
+    if _monitoring_middleware is not None and settings.monitor_enabled:
+        _monitoring_middleware.start_periodic_log()
+        logger.info("监控定期日志已启动 (间隔=%ds)", settings.monitor_log_interval)
+
     yield
+
+    # 停止监控定期日志
+    if _monitoring_middleware is not None:
+        _monitoring_middleware.stop_periodic_log()
+        logger.info("监控定期日志已停止")
+
+    # 关闭 MCP 连接
+    try:
+        from resume_agent.runtime import shutdown_mcp
+        await shutdown_mcp()
+    except Exception as exc:
+        logger.warning("MCP 关闭异常: %s", exc)
 
     # 关闭会话池
     if session_pool is not None:
@@ -60,6 +101,10 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """创建 FastAPI 应用实例。"""
+    global _rate_limit_middleware, _monitoring_middleware
+
+    settings = get_settings()
+
     app = FastAPI(
         title="Resume Agent",
         description="简历智能体 Web API",
@@ -78,6 +123,19 @@ def create_app() -> FastAPI:
 
     # JWT 认证中间件（在 CORS 之后添加，这样 CORS preflight 不受影响）
     app.add_middleware(AuthMiddleware)
+
+    # 速率限制中间件（在认证之后，可读取 user_id）
+    if settings.rate_limit_enabled:
+        app.add_middleware(RateLimitMiddleware, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
+        # 创建独立实例供状态 API 使用（与中间件内部独立，仅用于查询）
+        _rate_limit_middleware = RateLimitMiddleware(app, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
+        logger.info("速率限制中间件已启用 (rpm=%d)", settings.rate_limit_rpm)
+
+    # 监控中间件（最外层，记录所有请求）
+    if settings.monitor_enabled:
+        app.add_middleware(MonitoringMiddleware, log_interval=settings.monitor_log_interval)
+        _monitoring_middleware = MonitoringMiddleware(app, log_interval=settings.monitor_log_interval)
+        logger.info("监控中间件已启用 (interval=%ds)", settings.monitor_log_interval)
 
     # 注册路由
     from backend.routes.admin import router as admin_router

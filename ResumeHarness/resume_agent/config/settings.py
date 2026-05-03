@@ -28,6 +28,22 @@ class McpServerConfig(BaseModel):
     type: str = "http"  # 仅 HTTP
     url: str = ""
     headers: dict[str, str] = Field(default_factory=dict)
+    enabled: bool = True  # 是否启用
+
+
+# 默认 MCP 服务器配置
+DEFAULT_MCP_SERVERS: dict[str, dict[str, Any]] = {
+    "pdf": {
+        "type": "http",
+        "url": "http://127.0.0.1:9100",
+        "enabled": True,
+    },
+    "email": {
+        "type": "http",
+        "url": "http://127.0.0.1:9101",
+        "enabled": True,
+    },
+}
 
 
 class ResumeAgentSettings(BaseModel):
@@ -56,6 +72,15 @@ class ResumeAgentSettings(BaseModel):
     memory_other_max_bytes: int = 4096  # 其他记忆文件最大 4KB
     memory_max_history_entries: int = 10  # 优化历史最多 10 条
     memory_max_inject_tokens: int = 8000  # 总记忆注入不超过 8K tokens
+
+    # 速率限制配置
+    rate_limit_enabled: bool = True  # 是否启用速率限制
+    rate_limit_rpm: int = 20  # 每用户每分钟请求限制
+    rate_limit_max_wait: float = 5.0  # 速率限制最大等待时间（秒）
+
+    # 监控配置
+    monitor_enabled: bool = True  # 是否启用基础监控
+    monitor_log_interval: int = 60  # 监控日志汇总间隔（秒）
 
     # MCP 服务器配置
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
@@ -142,6 +167,15 @@ def load_settings() -> ResumeAgentSettings:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             raw = {}
+
+    # 合并默认 MCP 服务器配置
+    if "mcp_servers" not in raw:
+        raw["mcp_servers"] = DEFAULT_MCP_SERVERS
+    else:
+        # 用户配置覆盖默认值，但保留未覆盖的默认服务器
+        merged_servers = dict(DEFAULT_MCP_SERVERS)
+        merged_servers.update(raw["mcp_servers"])
+        raw["mcp_servers"] = merged_servers
 
     settings = ResumeAgentSettings.model_validate(raw)
 

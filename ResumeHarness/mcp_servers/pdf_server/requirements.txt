@@ -1,0 +1,4 @@
+# PDF MCP Server 依赖
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+weasyprint>=60.0

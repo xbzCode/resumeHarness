@@ -165,8 +165,8 @@ async def run_query(
                 if isinstance(event, ApiRetryEvent):
                     yield StatusEvent(
                         message=(
-                            f"Request failed; retrying in {event.delay_seconds:.1f}s "
-                            f"(attempt {event.attempt + 1} of {event.max_attempts}): {event.message}"
+                            f"AI 服务暂时繁忙，正在自动重试 "
+                            f"({event.attempt}/{event.max_attempts})..."
                         )
                     ), None
                     continue

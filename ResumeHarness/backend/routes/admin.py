@@ -49,21 +49,112 @@ async def list_tools(request: Request) -> dict[str, Any]:
 
 @router.get("/mcp/status")
 async def mcp_status(request: Request) -> dict[str, Any]:
-    """MCP 服务状态（P1 阶段暂返回配置信息）。"""
-    settings = get_settings()
-    servers = {}
-    for name, config in settings.mcp_servers.items():
-        servers[name] = {
-            "type": config.type,
-            "url": config.url,
-            "status": "not_connected",  # P1 阶段未实际连接 MCP
+    """MCP 服务状态。"""
+    try:
+        from resume_agent.mcp.manager import get_mcp_manager
+
+        manager = get_mcp_manager()
+        return manager.get_status()
+    except Exception as exc:
+        logger.warning("获取 MCP 状态失败: %s", exc)
+        # 降级：返回配置信息
+        settings = get_settings()
+        servers = {}
+        for name, config in settings.mcp_servers.items():
+            servers[name] = {
+                "url": config.url,
+                "connected": False,
+                "tools": [],
+                "reason": str(exc),
+            }
+        return {
+            "initialized": False,
+            "total_servers": len(servers),
+            "connected_servers": 0,
+            "servers": servers,
         }
 
+
+@router.post("/mcp/refresh")
+async def mcp_refresh(request: Request) -> dict[str, Any]:
+    """刷新 MCP 连接和工具列表。"""
+    try:
+        from resume_agent.mcp.manager import get_mcp_manager
+        from resume_agent.runtime import _get_shared_tool_registry
+
+        manager = get_mcp_manager()
+
+        # 重新初始化连接
+        await manager.shutdown()
+        await manager.initialize()
+
+        # 刷新工具注册
+        tool_registry = _get_shared_tool_registry()
+        count = manager.register_tools_to_registry(tool_registry)
+
+        return {
+            "success": True,
+            "registered_tools": count,
+            "status": manager.get_status(),
+        }
+    except Exception as exc:
+        logger.error("刷新 MCP 失败: %s", exc)
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
+
+# ---------------------------------------------------------------------------
+# MCP 认证 API
+# ---------------------------------------------------------------------------
+
+@router.get("/mcp/auth/{server_name}")
+async def get_mcp_auth(server_name: str, request: Request) -> dict[str, Any]:
+    """获取用户级 MCP 认证信息。"""
+    user_id = _get_user_id(request)
+    from resume_agent.mcp_auth import load_user_mcp_auth
+
+    headers = load_user_mcp_auth(user_id, server_name)
+    # 隐藏敏感值
+    masked_headers = {}
+    for key, value in headers.items():
+        if any(kw in key.lower() for kw in ("authorization", "password", "secret", "token", "key")):
+            masked_headers[key] = "****" if value else ""
+        else:
+            masked_headers[key] = value
+
     return {
-        "status": "available",
-        "servers": servers,
-        "message": "P1 阶段 MCP 未实际连接，仅返回配置信息",
+        "server_name": server_name,
+        "headers": masked_headers,
+        "has_auth": bool(headers),
     }
+
+
+@router.put("/mcp/auth/{server_name}")
+async def update_mcp_auth(server_name: str, request: Request) -> dict[str, Any]:
+    """更新用户级 MCP 认证信息。"""
+    user_id = _get_user_id(request)
+    body = await request.json()
+    headers = body.get("headers", {})
+
+    if not isinstance(headers, dict):
+        return {"success": False, "error": "headers 必须为字典"}
+
+    from resume_agent.mcp_auth import save_user_mcp_auth
+
+    save_user_mcp_auth(user_id, server_name, headers)
+    return {"success": True, "server_name": server_name}
+
+
+@router.delete("/mcp/auth/{server_name}")
+async def delete_mcp_auth_api(server_name: str, request: Request) -> dict[str, Any]:
+    """删除用户级 MCP 认证信息。"""
+    user_id = _get_user_id(request)
+    from resume_agent.mcp_auth import delete_user_mcp_auth
+
+    deleted = delete_user_mcp_auth(user_id, server_name)
+    return {"success": deleted, "server_name": server_name}
 
 
 # ---------------------------------------------------------------------------
@@ -116,3 +207,57 @@ async def get_session(session_id: str, request: Request) -> dict[str, Any]:
     except Exception as exc:
         logger.error("加载会话失败: %s", exc)
         return {"session_id": session_id, "found": False, "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# 速率限制 API
+# ---------------------------------------------------------------------------
+
+@router.get("/rate-limit/status")
+async def rate_limit_status(request: Request) -> dict[str, Any]:
+    """获取当前用户的速率限制状态。"""
+    user_id = _get_user_id(request)
+    settings = get_settings()
+
+    if not settings.rate_limit_enabled:
+        return {
+            "enabled": False,
+            "user_id": user_id,
+        }
+
+    # 从 app 获取 RateLimitMiddleware 实例
+    from backend.app import get_rate_limit_middleware
+    middleware = get_rate_limit_middleware()
+
+    if middleware is None:
+        return {
+            "enabled": True,
+            "user_id": user_id,
+            "rpm_limit": settings.rate_limit_rpm,
+            "status": "not_initialized",
+        }
+
+    limiter = middleware.get_limiter()
+    return {
+        "enabled": True,
+        **limiter.get_status(user_id),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 监控 API
+# ---------------------------------------------------------------------------
+
+@router.get("/monitor/metrics")
+async def monitor_metrics(request: Request) -> dict[str, Any]:
+    """获取监控指标（需认证）。"""
+    from backend.app import get_monitoring_middleware
+    middleware = get_monitoring_middleware()
+
+    if middleware is None:
+        return {"enabled": False}
+
+    return {
+        "enabled": True,
+        **middleware.get_metrics(),
+    }

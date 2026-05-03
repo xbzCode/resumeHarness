@@ -76,11 +76,19 @@ def _get_shared_api_client(settings: ResumeAgentSettings) -> OpenAICompatibleCli
 
 
 def _get_shared_tool_registry() -> ToolRegistry:
-    """获取进程级 ToolRegistry 单例。"""
+    """获取进程级 ToolRegistry 单例。
+
+    注册的内置工具：
+    - WebFetchTool
+    - MemoryWriteTool
+    - SkillLoaderTool
+
+    MCP 工具通过 McpClientManager 动态注册（见 init_mcp_tools()）。
+    """
     global _shared_tool_registry
     if _shared_tool_registry is None:
         _shared_tool_registry = ToolRegistry()
-        # 注册 P1 工具
+        # 注册内置工具
         from resume_agent.tools.web_fetch import WebFetchTool
         from resume_agent.tools.memory_write import MemoryWriteTool
         from resume_agent.tools.skill_loader import SkillLoaderTool
@@ -88,6 +96,43 @@ def _get_shared_tool_registry() -> ToolRegistry:
         _shared_tool_registry.register(MemoryWriteTool())
         _shared_tool_registry.register(SkillLoaderTool())
     return _shared_tool_registry
+
+
+async def init_mcp_tools() -> int:
+    """初始化 MCP 连接并注册 MCP 工具到 ToolRegistry。
+
+    应在应用启动时调用。连接失败的 MCP 服务器会被跳过，
+    不影响其他服务器和内置工具。
+
+    Returns:
+        注册的 MCP 工具数量
+    """
+    from resume_agent.mcp.manager import get_mcp_manager
+
+    manager = get_mcp_manager()
+    await manager.initialize()
+
+    tool_registry = _get_shared_tool_registry()
+    if tool_registry is None:
+        return 0
+
+    count = manager.register_tools_to_registry(tool_registry)
+    if count > 0:
+        log.info("已注册 %d 个 MCP 工具", count)
+    return count
+
+
+async def shutdown_mcp() -> None:
+    """关闭 MCP 连接并移除 MCP 工具。应在应用关闭时调用。"""
+    from resume_agent.mcp.manager import get_mcp_manager, reset_mcp_manager
+
+    manager = get_mcp_manager()
+    tool_registry = _get_shared_tool_registry()
+    if tool_registry is not None:
+        manager.unregister_tools_from_registry(tool_registry)
+    await manager.shutdown()
+    reset_mcp_manager()
+    log.info("MCP 连接已关闭")
 
 
 def _get_shared_hook_executor() -> HookExecutor | None:
@@ -191,3 +236,7 @@ def reset_shared_instances() -> None:
     _shared_tool_registry = None
     _shared_hook_executor = None
     _shared_key_pool = None
+
+    # 同时重置 MCP 管理器
+    from resume_agent.mcp.manager import reset_mcp_manager
+    reset_mcp_manager()

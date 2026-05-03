@@ -11,7 +11,9 @@ from typing import AsyncIterator
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from resume_agent.api.errors import RateLimitFailure
 from resume_agent.engine.stream_events import (
+    ApiRetryEvent,
     AssistantTextDelta,
     AssistantTurnComplete,
     ErrorEvent,
@@ -21,6 +23,7 @@ from resume_agent.engine.stream_events import (
     ToolExecutionCompleted,
     ToolExecutionStarted,
 )
+from resume_agent.exceptions import RateLimitError
 
 from resume_agent.models.api_schemas import ChatRequest
 from resume_agent.models.sse_events import (
@@ -387,6 +390,21 @@ async def _chat_stream(
                     except Exception as exc:
                         logger.warning("保存简历快照失败: %s", exc)
 
+    except RateLimitFailure as exc:
+        logger.warning("DeepSeek 速率限制: %s", exc)
+        yield format_sse_data(SseStatus(message="AI 服务繁忙，正在排队重试..."))
+        yield format_sse_data(SseError(
+            code=2002,
+            message="AI 服务当前请求过多，请稍等片刻后重新发送",
+        ))
+        yield format_sse_data(SseAssistantTurnComplete())
+    except RateLimitError as exc:
+        logger.warning("速率限制: %s", exc)
+        yield format_sse_data(SseError(
+            code=2002,
+            message=str(exc.message) if hasattr(exc, "message") else str(exc),
+        ))
+        yield format_sse_data(SseAssistantTurnComplete())
     except Exception as exc:
         logger.error("对话流式处理异常: %s", exc, exc_info=True)
         yield format_sse_data(SseError(code=2001, message=f"对话处理失败: {exc}"))
