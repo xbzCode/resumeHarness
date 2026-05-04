@@ -23,6 +23,11 @@ import {
   LogOut,
   Menu,
   Plus,
+  BookOpen,
+  Server,
+  Layout,
+  Info,
+  Wrench,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useChatStore } from "@/store/chat";
@@ -34,6 +39,14 @@ const NAV_ITEMS = [
   { href: "/chat", label: "对话", icon: MessageSquare },
   { href: "/resumes", label: "简历", icon: FileText },
   { href: "/memory", label: "记忆", icon: Brain },
+];
+
+const NAV_ADMIN_ITEMS = [
+  { href: "/skills", label: "技能", icon: BookOpen },
+  { href: "/tools", label: "工具", icon: Wrench },
+  { href: "/mcp", label: "MCP", icon: Server },
+  { href: "/templates", label: "模板", icon: Layout },
+  { href: "/about", label: "关于", icon: Info },
 ];
 
 function UserMenu() {
@@ -111,6 +124,28 @@ function SidebarContent() {
       <ScrollArea className="flex-1 px-3 py-2">
         <nav className="space-y-1">
           {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                  active
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+          <div className="pt-3 pb-1 px-3">
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">系统配置</p>
+          </div>
+          {NAV_ADMIN_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
             return (

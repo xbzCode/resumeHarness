@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from resume_agent.config.settings import get_settings
 from resume_agent.memory.paths import ensure_user_dirs
 from resume_agent.services.session_storage import list_session_snapshots, load_latest_snapshot
-from resume_agent.skills.resume_skill import get_skill_info, list_skills
+from resume_agent.skills.resume_skill import get_skill_info, list_skills, load_skill_content
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +34,23 @@ async def list_tools(request: Request) -> dict[str, Any]:
     registry = _get_shared_tool_registry()
     tools = []
     for tool in registry.list_tools():
-        tools.append({
+        tool_info = {
             "name": tool.name,
             "description": tool.description,
             "input_schema": tool.input_model.model_json_schema(),
-        })
+            "category": getattr(tool, "category", "其他"),
+            "is_read_only": tool.is_read_only(None),
+            "source": "mcp" if tool.name.startswith("mcp__") else "builtin",
+        }
+        tools.append(tool_info)
 
-    return {"tools": tools}
+    # 按分类分组统计
+    categories: dict[str, int] = {}
+    for t in tools:
+        cat = t["category"]
+        categories[cat] = categories.get(cat, 0) + 1
+
+    return {"tools": tools, "total": len(tools), "categories": categories}
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +176,26 @@ async def list_skills_api(request: Request) -> dict[str, Any]:
     """Skill 列表。"""
     skills = list_skills()
     return {"skills": skills}
+
+
+@router.get("/skills/{skill_name}")
+async def get_skill_detail(skill_name: str) -> dict[str, Any]:
+    """获取指定 Skill 的详情。"""
+    info = get_skill_info(skill_name)
+    if not info.get("found"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_name}' 不存在")
+    return info
+
+
+@router.get("/skills/{skill_name}/content")
+async def get_skill_content(skill_name: str) -> dict[str, Any]:
+    """获取指定 Skill 的正文内容（不含 Front Matter）。"""
+    content = load_skill_content(skill_name)
+    if content is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_name}' 不存在")
+    return {"name": skill_name, "content": content}
 
 
 # ---------------------------------------------------------------------------
