@@ -92,6 +92,16 @@ class ResumeAgentSettings(BaseModel):
     monitor_enabled: bool = True  # 是否启用基础监控
     monitor_log_interval: int = 60  # 监控日志汇总间隔（秒）
 
+    # CORS 配置
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://0.0.0.0:3000",
+        ],
+        description="CORS 允许的来源列表。生产环境应替换为实际域名。设为 [\"*\"] 则允许所有来源。可通过 CORS_ALLOWED_ORIGINS 环境变量覆盖（逗号分隔）。",
+    )
+
     # MCP 服务器配置
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
 
@@ -193,6 +203,12 @@ def load_settings() -> ResumeAgentSettings:
     env_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if env_key:
         settings = settings.model_copy(update={"api_key": env_key})
+
+    # CORS 环境变量覆盖（逗号分隔）
+    env_cors = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+    if env_cors:
+        cors_list = [o.strip() for o in env_cors.split(",") if o.strip()]
+        settings = settings.model_copy(update={"cors_allowed_origins": cors_list})
 
     _settings_instance = settings
     return settings

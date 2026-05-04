@@ -484,19 +484,29 @@ def _sync_resume_index_to_db(
     file_path: str,
     size_bytes: int,
 ) -> None:
-    """同步简历索引到 SQLite 数据库。"""
-    try:
-        from resume_agent.db import get_db
+    """同步简历索引到 SQLite 数据库（异步，fire-and-forget）。"""
+    import asyncio
 
-        db = get_db()
-        db.save_resume_index(
-            user_id=user_id,
-            resume_id=resume_id,
-            file_path=file_path,
-            size_bytes=size_bytes,
-        )
-    except Exception as exc:
-        log.warning("同步简历索引到 SQLite 失败: %s", exc)
+    async def _do_sync() -> None:
+        try:
+            from resume_agent.db import get_db
+
+            db = await get_db()
+            await db.save_resume_index(
+                user_id=user_id,
+                resume_id=resume_id,
+                file_path=file_path,
+                size_bytes=size_bytes,
+            )
+        except Exception as exc:
+            log.warning("同步简历索引到 SQLite 失败: %s", exc)
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_do_sync())
+    except RuntimeError:
+        # 没有运行中的事件循环，跳过
+        pass
 
 
 # ---------------------------------------------------------------------------

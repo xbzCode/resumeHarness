@@ -106,6 +106,7 @@ function MessageBubble({
   suggestions,
   resumePrefix,
   resumeScore,
+  prevResumeContent,
   isStreaming,
 }: {
   role: "user" | "assistant" | "system";

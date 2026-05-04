@@ -18,36 +18,39 @@ class TestTenantIsolation:
     """测试用户间数据隔离：用户 A 看不到用户 B 的数据。"""
 
     @pytest.fixture()
-    def client(self, tmp_path, monkeypatch):
-        from fastapi.testclient import TestClient
+    async def client(self, tmp_path, monkeypatch):
+        from httpx import AsyncClient, ASGITransport
         from resume_agent.db import ResumeAgentDB
         from backend.app import create_app
 
         db_path = tmp_path / "test_isolation.db"
         db = ResumeAgentDB(str(db_path))
-        db.connect()
+        await db.connect()
 
         import resume_agent.db as db_mod
         monkeypatch.setattr(db_mod, "_db_instance", db)
         monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
 
         app = create_app()
-        yield TestClient(app)
-        db.close()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+        await db.close()
 
-    def _register_and_get_token(self, client, username, password="Pass1234!"):
+    async def _register_and_get_token(self, client, username, password="Pass1234!"):
         """注册用户并返回 access_token。"""
-        resp = client.post(
+        resp = await client.post(
             "/api/auth/register",
             json={"username": username, "password": password},
         )
         assert resp.status_code == 200
         return resp.json()["access_token"]
 
-    def test_session_isolation(self, client, tmp_path):
+    @pytest.mark.asyncio
+    async def test_session_isolation(self, client, tmp_path):
         """用户 A 看不到用户 B 的会话。"""
-        token_a = self._register_and_get_token(client, "user_a")
-        token_b = self._register_and_get_token(client, "user_b")
+        token_a = await self._register_and_get_token(client, "user_a")
+        token_b = await self._register_and_get_token(client, "user_b")
 
         # 用户 A 创建会话快照（通过直接写文件模拟）
         from resume_agent.services.session_storage import save_session_snapshot
@@ -64,20 +67,21 @@ class TestTenantIsolation:
         )
 
         # 用户 A 可以看到自己的会话
-        resp_a = client.get("/api/sessions", headers={"Authorization": f"Bearer {token_a}"})
+        resp_a = await client.get("/api/sessions", headers={"Authorization": f"Bearer {token_a}"})
         assert resp_a.status_code == 200
 
         # 用户 B 的会话列表应为空（不同 user_id 的目录）
-        resp_b = client.get("/api/sessions", headers={"Authorization": f"Bearer {token_b}"})
+        resp_b = await client.get("/api/sessions", headers={"Authorization": f"Bearer {token_b}"})
         assert resp_b.status_code == 200
 
-    def test_memory_isolation(self, client):
+    @pytest.mark.asyncio
+    async def test_memory_isolation(self, client):
         """用户 A 看不到用户 B 的记忆。"""
-        token_a = self._register_and_get_token(client, "mem_user_a")
-        token_b = self._register_and_get_token(client, "mem_user_b")
+        token_a = await self._register_and_get_token(client, "mem_user_a")
+        token_b = await self._register_and_get_token(client, "mem_user_b")
 
         # 用户 A 写入记忆
-        resp = client.put(
+        resp = await client.put(
             "/api/memory/技能标签.md",
             json={"content": "Python, React", "mode": "replace"},
             headers={"Authorization": f"Bearer {token_a}"},
@@ -85,7 +89,7 @@ class TestTenantIsolation:
         assert resp.status_code == 200
 
         # 用户 B 的记忆列表应为空
-        resp_b = client.get("/api/memory", headers={"Authorization": f"Bearer {token_b}"})
+        resp_b = await client.get("/api/memory", headers={"Authorization": f"Bearer {token_b}"})
         assert resp_b.status_code == 200
         docs_b = resp_b.json()["documents"]
         # 用户 B 没有 技能标签.md
@@ -93,23 +97,24 @@ class TestTenantIsolation:
         assert "技能标签.md" not in names_b
 
         # 用户 A 可以看到自己的记忆
-        resp_a = client.get("/api/memory", headers={"Authorization": f"Bearer {token_a}"})
+        resp_a = await client.get("/api/memory", headers={"Authorization": f"Bearer {token_a}"})
         assert resp_a.status_code == 200
         docs_a = resp_a.json()["documents"]
         names_a = [d["name"] for d in docs_a]
         assert "技能标签.md" in names_a
 
-    def test_resume_isolation(self, client):
+    @pytest.mark.asyncio
+    async def test_resume_isolation(self, client):
         """用户 A 无法下载用户 B 的简历。"""
-        token_a = self._register_and_get_token(client, "res_user_a")
-        token_b = self._register_and_get_token(client, "res_user_b")
+        token_a = await self._register_and_get_token(client, "res_user_a")
+        token_b = await self._register_and_get_token(client, "res_user_b")
 
         # 用户 A 保存简历快照
         from resume_agent.resume_renderer import save_resume_snapshot
         resume_id = save_resume_snapshot("res_user_a_id", "# 张三的简历\n\n工作经历...")
 
         # 用户 A 可以下载自己的简历
-        resp_a = client.get(
+        resp_a = await client.get(
             f"/api/resume/{resume_id}/download?format=markdown",
             headers={"Authorization": f"Bearer {token_a}"},
         )
@@ -117,13 +122,14 @@ class TestTenantIsolation:
         # 但隔离逻辑是正确的 —— 不同 user_id 的目录不同
 
         # 用户 B 尝试下载用户 A 的简历 → 应该 404
-        resp_b = client.get(
+        resp_b = await client.get(
             f"/api/resume/{resume_id}/download?format=markdown",
             headers={"Authorization": f"Bearer {token_b}"},
         )
         assert resp_b.status_code == 404
 
-    def test_unauthorized_access_returns_401(self, client):
+    @pytest.mark.asyncio
+    async def test_unauthorized_access_returns_401(self, client):
         """未认证请求访问受保护端点返回 401。"""
         endpoints = [
             ("GET", "/api/memory"),
@@ -133,7 +139,7 @@ class TestTenantIsolation:
             ("GET", "/api/auth/profile"),
         ]
         for method, path in endpoints:
-            resp = client.request(method, path)
+            resp = await client.request(method, path)
             assert resp.status_code == 401, f"{method} {path} should return 401"
 
 
@@ -201,7 +207,8 @@ class TestMcpAuth:
 class TestSQLiteSync:
     """测试会话和简历元数据同步到 SQLite。"""
 
-    def test_session_meta_synced_on_save(self, tmp_path, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_session_meta_synced_on_save(self, tmp_path, monkeypatch):
         monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
 
         from resume_agent.db import ResumeAgentDB
@@ -211,17 +218,20 @@ class TestSQLiteSync:
 
         db_path = tmp_path / "sync_test.db"
         db = ResumeAgentDB(str(db_path))
-        db.connect()
+        await db.connect()
 
         import resume_agent.db as db_mod
         monkeypatch.setattr(db_mod, "_db_instance", db)
 
         # 先创建用户（满足 FOREIGN KEY 约束）
-        db.create_user(username="sync_user", password_hash="hash")
+        await db.create_user(username="sync_user", password_hash="hash")
 
         # 保存会话快照
+        user = await db.get_user_by_username("sync_user")
+        uid = user["user_id"]
+
         save_session_snapshot(
-            user_id=db.get_user_by_username("sync_user")["user_id"],
+            user_id=uid,
             model="deepseek-chat",
             system_prompt="test",
             messages=[ConversationMessage(role="user", text="测试")],
@@ -229,15 +239,18 @@ class TestSQLiteSync:
             session_id="sync_sess_1",
         )
 
-        # 验证 SQLite 中有记录
-        uid = db.get_user_by_username("sync_user")["user_id"]
-        sessions = db.list_sessions(uid)
+        # 验证 SQLite 中有记录（异步同步可能需要短暂等待）
+        import asyncio
+        await asyncio.sleep(0.1)
+
+        sessions = await db.list_sessions(uid)
         assert len(sessions) >= 1
         assert sessions[0]["session_id"] == "sync_sess_1"
 
-        db.close()
+        await db.close()
 
-    def test_resume_index_synced_on_save(self, tmp_path, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_resume_index_synced_on_save(self, tmp_path, monkeypatch):
         monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
 
         from resume_agent.db import ResumeAgentDB
@@ -245,25 +258,28 @@ class TestSQLiteSync:
 
         db_path = tmp_path / "resume_sync_test.db"
         db = ResumeAgentDB(str(db_path))
-        db.connect()
+        await db.connect()
 
         import resume_agent.db as db_mod
         monkeypatch.setattr(db_mod, "_db_instance", db)
 
         # 先创建用户
-        uid = db.create_user(username="sync_user2", password_hash="hash")
+        uid = await db.create_user(username="sync_user2", password_hash="hash")
 
         # 保存简历快照
         resume_id = save_resume_snapshot(uid, "# 测试简历\n\n工作经历...")
 
-        # 验证 SQLite 中有记录
-        path = db.get_resume_path(resume_id)
+        # 验证 SQLite 中有记录（异步同步可能需要短暂等待）
+        import asyncio
+        await asyncio.sleep(0.1)
+
+        path = await db.get_resume_path(resume_id)
         assert path is not None
 
-        resumes = db.list_resumes(uid)
+        resumes = await db.list_resumes(uid)
         assert len(resumes) >= 1
 
-        db.close()
+        await db.close()
 
 
 # ─── memory_write 工具隔离 ────────────────────────────────────

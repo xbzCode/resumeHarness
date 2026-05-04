@@ -28,6 +28,7 @@ import { useAuthStore } from "@/store/auth";
 import { useChatStore } from "@/store/chat";
 import { cn } from "@/lib/utils";
 import { AuthGuard } from "@/components/auth-guard";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "对话", icon: MessageSquare },
@@ -133,12 +134,13 @@ function SidebarContent() {
 
       <Separator />
 
-      {/* 用户菜单 */}
-      <div className="flex items-center gap-2 p-3">
+      {/* 用户菜单 + 主题切换 */}
+      <div className="flex items-center gap-1 p-3">
         <UserMenu />
-        <span className="text-sm text-muted-foreground truncate">
+        <span className="flex-1 text-sm text-muted-foreground truncate">
           {user?.username || ""}
         </span>
+        <ThemeToggle className="h-8 w-8 shrink-0" />
       </div>
     </div>
   );

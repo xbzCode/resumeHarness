@@ -128,20 +128,30 @@ def _sync_session_meta_to_db(
     message_count: int,
     summary: str = "",
 ) -> None:
-    """同步会话元数据到 SQLite 数据库。"""
-    try:
-        from resume_agent.db import get_db
+    """同步会话元数据到 SQLite 数据库（异步，fire-and-forget）。"""
+    import asyncio
 
-        db = get_db()
-        db.save_session_meta(
-            user_id=user_id,
-            session_id=session_id,
-            channel="web",
-            model=model,
-            message_count=message_count,
-        )
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning(
-            "同步会话元数据到 SQLite 失败: %s", exc
-        )
+    async def _do_sync() -> None:
+        try:
+            from resume_agent.db import get_db
+
+            db = await get_db()
+            await db.save_session_meta(
+                user_id=user_id,
+                session_id=session_id,
+                channel="web",
+                model=model,
+                message_count=message_count,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "同步会话元数据到 SQLite 失败: %s", exc
+            )
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_do_sync())
+    except RuntimeError:
+        # 没有运行中的事件循环，跳过
+        pass

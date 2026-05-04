@@ -9,8 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from resume_agent.exceptions import AuthenticationError, TokenExpiredError
 
@@ -27,64 +26,86 @@ _PUBLIC_PATH_PREFIXES = (
 )
 
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    """JWT 认证中间件。"""
+class AuthMiddleware:
+    """JWT 认证中间件（纯 ASGI 实现，避免 BaseHTTPMiddleware 的 body 消费问题）。"""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        # 非 API 路径（前端静态文件等）直接放行
-        path = request.url.path
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # 从 scope 中获取路径和方法
+        path = scope.get("path", "")
+        method = scope.get("method", "")
+
+        # 非 API 路径直接放行
         if not path.startswith("/api/"):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         # 公开路径放行
         for prefix in _PUBLIC_PATH_PREFIXES:
             if path.startswith(prefix):
-                return await call_next(request)
+                await self.app(scope, receive, send)
+                return
 
         # OPTIONS 请求放行（CORS preflight）
-        if request.method == "OPTIONS":
-            return await call_next(request)
+        if method == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
 
-        # 提取 JWT Token
-        auth_header = request.headers.get("Authorization", "")
+        # 从 headers 中提取 Authorization
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode("latin-1")
+
         if not auth_header.startswith("Bearer "):
-            return Response(
-                content='{"detail":"用户未认证","code":1001}',
-                status_code=401,
-                media_type="application/json",
-            )
+            await self._send_auth_error(send, "用户未认证", 1001)
+            return
 
         token = auth_header[7:]  # 去掉 "Bearer " 前缀
         if not token:
-            return Response(
-                content='{"detail":"用户未认证","code":1001}',
-                status_code=401,
-                media_type="application/json",
-            )
+            await self._send_auth_error(send, "用户未认证", 1001)
+            return
 
         # 验证 Token
         try:
             payload = verify_jwt(token)
         except TokenExpiredError:
-            return Response(
-                content='{"detail":"Token 过期","code":1002}',
-                status_code=401,
-                media_type="application/json",
-            )
+            await self._send_auth_error(send, "Token 过期", 1002)
+            return
         except AuthenticationError:
-            return Response(
-                content='{"detail":"Token 无效","code":1001}',
-                status_code=401,
-                media_type="application/json",
-            )
+            await self._send_auth_error(send, "Token 无效", 1001)
+            return
 
-        # 注入 user_id 到 request.state
-        request.state.user_id = payload["user_id"]
-        request.state.username = payload.get("username", "")
+        # 注入 user_id 到 scope["state"]
+        if "state" not in scope:
+            scope["state"] = {}
+        scope["state"]["user_id"] = payload["user_id"]
+        scope["state"]["username"] = payload.get("username", "")
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
+
+    @staticmethod
+    async def _send_auth_error(send: Send, detail: str, code: int) -> None:
+        """发送认证错误响应。"""
+        import json
+
+        body = json.dumps({"detail": detail, "code": code}, ensure_ascii=False).encode("utf-8")
+        await send({
+            "type": "http.response.start",
+            "status": 401,
+            "headers": [
+                [b"content-type", b"application/json"],
+                [b"content-length", str(len(body)).encode()],
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body,
+        })
 
 
 # ---------------------------------------------------------------------------

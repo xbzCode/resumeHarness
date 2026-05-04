@@ -93,10 +93,10 @@ async def register(body: RegisterRequest) -> Any:
 
     创建用户后自动初始化用户目录，返回 access_token 和 refresh_token。
     """
-    db = get_db()
+    db = await get_db()
 
     # 检查用户名是否已存在
-    existing = db.get_user_by_username(body.username)
+    existing = await db.get_user_by_username(body.username)
     if existing is not None:
         raise HTTPException(status_code=409, detail="用户名已存在")
 
@@ -105,7 +105,7 @@ async def register(body: RegisterRequest) -> Any:
 
     # 创建用户
     try:
-        user_id = db.create_user(
+        user_id = await db.create_user(
             username=body.username,
             password_hash=password_hash,
             email=body.email,
@@ -140,9 +140,9 @@ async def login(body: LoginRequest) -> Any:
 
     验证用户名密码，返回 access_token 和 refresh_token。
     """
-    db = get_db()
+    db = await get_db()
 
-    user = db.get_user_by_username(body.username)
+    user = await db.get_user_by_username(body.username)
     if user is None:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
@@ -191,8 +191,8 @@ async def refresh_token(body: RefreshRequest) -> Any:
     username = payload.get("username", "")
 
     # 验证用户仍存在
-    db = get_db()
-    user = db.get_user_by_user_id(user_id)
+    db = await get_db()
+    user = await db.get_user_by_user_id(user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="用户不存在")
 
@@ -219,9 +219,9 @@ async def get_profile(request: Request) -> Any:
     需要携带有效的 JWT Token。
     """
     user_id = request.state.user_id
-    db = get_db()
+    db = await get_db()
 
-    user = db.get_user_by_user_id(user_id)
+    user = await db.get_user_by_user_id(user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
 
@@ -237,9 +237,9 @@ async def get_profile(request: Request) -> Any:
 async def change_password(body: ChangePasswordRequest, request: Request) -> dict[str, Any]:
     """修改密码。需要 JWT 认证。"""
     user_id = request.state.user_id
-    db = get_db()
+    db = await get_db()
 
-    user = db.get_user_by_user_id(user_id)
+    user = await db.get_user_by_user_id(user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
 
@@ -247,7 +247,7 @@ async def change_password(body: ChangePasswordRequest, request: Request) -> dict
         raise HTTPException(status_code=400, detail="当前密码错误")
 
     new_hash = hash_password(body.new_password)
-    db.update_user_password(user_id, new_hash)
+    await db.update_user_password(user_id, new_hash)
 
     logger.info("用户修改密码: user_id=%s", user_id)
     return {"message": "密码修改成功"}

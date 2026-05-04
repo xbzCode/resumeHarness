@@ -18,91 +18,103 @@ class TestResumeAgentDB:
     """测试 resume_agent.db.ResumeAgentDB。"""
 
     @pytest.fixture()
-    def db(self, tmp_path):
+    async def db(self, tmp_path):
         from resume_agent.db import ResumeAgentDB
 
         db_path = tmp_path / "test.db"
         database = ResumeAgentDB(str(db_path))
-        database.connect()
+        await database.connect()
         yield database
-        database.close()
+        await database.close()
 
-    def test_create_and_get_user(self, db):
-        uid = db.create_user(username="alice", password_hash="hash1")
+    @pytest.mark.asyncio
+    async def test_create_and_get_user(self, db):
+        uid = await db.create_user(username="alice", password_hash="hash1")
         assert uid is not None and len(uid) > 0
-        user = db.get_user_by_username("alice")
+        user = await db.get_user_by_username("alice")
         assert user is not None
         assert user["username"] == "alice"
         assert user["password_hash"] == "hash1"
 
-    def test_get_user_not_found(self, db):
-        user = db.get_user_by_username("nonexist")
+    @pytest.mark.asyncio
+    async def test_get_user_not_found(self, db):
+        user = await db.get_user_by_username("nonexist")
         assert user is None
 
-    def test_duplicate_username_raises(self, db):
-        db.create_user(username="bob", password_hash="h1")
+    @pytest.mark.asyncio
+    async def test_duplicate_username_raises(self, db):
+        await db.create_user(username="bob", password_hash="h1")
         with pytest.raises(ValueError, match="用户名已存在"):
-            db.create_user(username="bob", password_hash="h2")
+            await db.create_user(username="bob", password_hash="h2")
 
-    def test_get_user_by_user_id(self, db):
-        uid = db.create_user(username="charlie", password_hash="h1")
-        user = db.get_user_by_user_id(uid)
+    @pytest.mark.asyncio
+    async def test_get_user_by_user_id(self, db):
+        uid = await db.create_user(username="charlie", password_hash="h1")
+        user = await db.get_user_by_user_id(uid)
         assert user is not None
         assert user["username"] == "charlie"
 
-    def test_update_user_password(self, db):
-        uid = db.create_user(username="dave", password_hash="h1")
-        db.update_user_password(uid, "new_hash")
-        user = db.get_user_by_username("dave")
+    @pytest.mark.asyncio
+    async def test_update_user_password(self, db):
+        uid = await db.create_user(username="dave", password_hash="h1")
+        await db.update_user_password(uid, "new_hash")
+        user = await db.get_user_by_username("dave")
         assert user["password_hash"] == "new_hash"
 
-    def test_bind_channel(self, db):
-        uid = db.create_user(username="eve", password_hash="h1")
-        db.bind_channel(channel="wechat", sender_id="wx_123", user_id=uid)
-        result = db.get_user_by_channel_sender("wechat", "wx_123")
+    @pytest.mark.asyncio
+    async def test_bind_channel(self, db):
+        uid = await db.create_user(username="eve", password_hash="h1")
+        await db.bind_channel(channel="wechat", sender_id="wx_123", user_id=uid)
+        result = await db.get_user_by_channel_sender("wechat", "wx_123")
         assert result is not None
         assert result["user_id"] == uid
         assert result["username"] == "eve"
 
-    def test_bind_channel_upsert(self, db):
-        uid1 = db.create_user(username="frank", password_hash="h1")
-        uid2 = db.create_user(username="grace", password_hash="h2")
-        db.bind_channel(channel="wechat", sender_id="wx_456", user_id=uid1)
-        db.bind_channel(channel="wechat", sender_id="wx_456", user_id=uid2)
-        result = db.get_user_by_channel_sender("wechat", "wx_456")
+    @pytest.mark.asyncio
+    async def test_bind_channel_upsert(self, db):
+        uid1 = await db.create_user(username="frank", password_hash="h1")
+        uid2 = await db.create_user(username="grace", password_hash="h2")
+        await db.bind_channel(channel="wechat", sender_id="wx_456", user_id=uid1)
+        await db.bind_channel(channel="wechat", sender_id="wx_456", user_id=uid2)
+        result = await db.get_user_by_channel_sender("wechat", "wx_456")
         assert result["user_id"] == uid2
 
-    def test_save_session_meta(self, db):
-        uid = db.create_user(username="heidi", password_hash="h1")
-        db.save_session_meta(user_id=uid, session_id="sess_1", channel="web", model="deepseek-chat")
-        sessions = db.list_sessions(uid)
+    @pytest.mark.asyncio
+    async def test_save_session_meta(self, db):
+        uid = await db.create_user(username="heidi", password_hash="h1")
+        await db.save_session_meta(user_id=uid, session_id="sess_1", channel="web", model="deepseek-chat")
+        sessions = await db.list_sessions(uid)
         assert len(sessions) == 1
         assert sessions[0]["session_id"] == "sess_1"
 
-    def test_delete_session_meta(self, db):
-        uid = db.create_user(username="ivan", password_hash="h1")
-        db.save_session_meta(user_id=uid, session_id="sess_2")
-        assert db.delete_session_meta(uid, "sess_2") is True
-        assert db.delete_session_meta(uid, "nonexist") is False
+    @pytest.mark.asyncio
+    async def test_delete_session_meta(self, db):
+        uid = await db.create_user(username="ivan", password_hash="h1")
+        await db.save_session_meta(user_id=uid, session_id="sess_2")
+        assert await db.delete_session_meta(uid, "sess_2") is True
+        assert await db.delete_session_meta(uid, "nonexist") is False
 
-    def test_save_resume_index(self, db):
-        uid = db.create_user(username="judy", password_hash="h1")
-        db.save_resume_index(user_id=uid, resume_id="res_1", file_path="/path/resume.md", size_bytes=1024)
-        resumes = db.list_resumes(uid)
+    @pytest.mark.asyncio
+    async def test_save_resume_index(self, db):
+        uid = await db.create_user(username="judy", password_hash="h1")
+        await db.save_resume_index(user_id=uid, resume_id="res_1", file_path="/path/resume.md", size_bytes=1024)
+        resumes = await db.list_resumes(uid)
         assert len(resumes) == 1
         assert resumes[0]["resume_id"] == "res_1"
 
-    def test_get_resume_path(self, db):
-        uid = db.create_user(username="karl", password_hash="h1")
-        db.save_resume_index(user_id=uid, resume_id="res_2", file_path="/path/resume2.md")
-        assert db.get_resume_path("res_2") == "/path/resume2.md"
-        assert db.get_resume_path("nonexist") is None
+    @pytest.mark.asyncio
+    async def test_get_resume_path(self, db):
+        uid = await db.create_user(username="karl", password_hash="h1")
+        await db.save_resume_index(user_id=uid, resume_id="res_2", file_path="/path/resume2.md")
+        assert await db.get_resume_path("res_2") == "/path/resume2.md"
+        assert await db.get_resume_path("nonexist") is None
 
-    def test_delete_resume_index(self, db):
-        uid = db.create_user(username="larry", password_hash="h1")
-        db.save_resume_index(user_id=uid, resume_id="res_3", file_path="/path/resume3.md")
-        assert db.delete_resume_index("res_3") is True
-        assert db.delete_resume_index("nonexist") is False
+    @pytest.mark.asyncio
+    async def test_delete_resume_index(self, db):
+        uid = await db.create_user(username="larry", password_hash="h1")
+        await db.save_resume_index(user_id=uid, resume_id="res_3", file_path="/path/resume3.md")
+        assert await db.delete_resume_index("res_3") is True
+        assert await db.delete_resume_index("nonexist") is False
 
 
 # ─── JWT 工具函数 ─────────────────────────────────────────────
@@ -159,14 +171,14 @@ class TestAuthAPI:
     """测试 backend.routes.auth 路由。"""
 
     @pytest.fixture()
-    def client(self, tmp_path, monkeypatch):
-        from fastapi.testclient import TestClient
+    async def client(self, tmp_path, monkeypatch):
+        from httpx import AsyncClient, ASGITransport
         from resume_agent.db import ResumeAgentDB
         from backend.app import create_app
 
         db_path = tmp_path / "test_api.db"
         db = ResumeAgentDB(str(db_path))
-        db.connect()
+        await db.connect()
 
         # 用临时数据库替换全局单例
         import resume_agent.db as db_mod
@@ -176,11 +188,14 @@ class TestAuthAPI:
         monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
 
         app = create_app()
-        yield TestClient(app)
-        db.close()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+        await db.close()
 
-    def test_register_success(self, client):
-        resp = client.post(
+    @pytest.mark.asyncio
+    async def test_register_success(self, client):
+        resp = await client.post(
             "/api/auth/register",
             json={"username": "testuser", "password": "Pass1234!"},
         )
@@ -191,14 +206,16 @@ class TestAuthAPI:
         assert data["username"] == "testuser"
         assert data["user_id"] is not None
 
-    def test_register_duplicate_username(self, client):
-        client.post("/api/auth/register", json={"username": "dup", "password": "Pass1234!"})
-        resp = client.post("/api/auth/register", json={"username": "dup", "password": "Pass5678!"})
+    @pytest.mark.asyncio
+    async def test_register_duplicate_username(self, client):
+        await client.post("/api/auth/register", json={"username": "dup", "password": "Pass1234!"})
+        resp = await client.post("/api/auth/register", json={"username": "dup", "password": "Pass5678!"})
         assert resp.status_code == 409
 
-    def test_login_success(self, client):
-        client.post("/api/auth/register", json={"username": "loginuser", "password": "Pass1234!"})
-        resp = client.post(
+    @pytest.mark.asyncio
+    async def test_login_success(self, client):
+        await client.post("/api/auth/register", json={"username": "loginuser", "password": "Pass1234!"})
+        resp = await client.post(
             "/api/auth/login",
             json={"username": "loginuser", "password": "Pass1234!"},
         )
@@ -207,56 +224,62 @@ class TestAuthAPI:
         assert "access_token" in data
         assert "refresh_token" in data
 
-    def test_login_wrong_password(self, client):
-        client.post("/api/auth/register", json={"username": "wrongpw", "password": "Pass1234!"})
-        resp = client.post(
+    @pytest.mark.asyncio
+    async def test_login_wrong_password(self, client):
+        await client.post("/api/auth/register", json={"username": "wrongpw", "password": "Pass1234!"})
+        resp = await client.post(
             "/api/auth/login",
             json={"username": "wrongpw", "password": "WrongPass!"},
         )
         assert resp.status_code == 401
 
-    def test_refresh_token(self, client):
-        reg = client.post(
+    @pytest.mark.asyncio
+    async def test_refresh_token(self, client):
+        reg = await client.post(
             "/api/auth/register",
             json={"username": "refreshuser", "password": "Pass1234!"},
         )
         refresh_token = reg.json()["refresh_token"]
-        resp = client.post(
+        resp = await client.post(
             "/api/auth/refresh",
             json={"refresh_token": refresh_token},
         )
         assert resp.status_code == 200
         assert "access_token" in resp.json()
 
-    def test_profile_with_auth(self, client):
-        reg = client.post(
+    @pytest.mark.asyncio
+    async def test_profile_with_auth(self, client):
+        reg = await client.post(
             "/api/auth/register",
             json={"username": "profileuser", "password": "Pass1234!"},
         )
         access_token = reg.json()["access_token"]
-        resp = client.get(
+        resp = await client.get(
             "/api/auth/profile",
             headers={"Authorization": f"Bearer {access_token}"},
         )
         assert resp.status_code == 200
         assert resp.json()["username"] == "profileuser"
 
-    def test_profile_without_auth(self, client):
-        resp = client.get("/api/auth/profile")
+    @pytest.mark.asyncio
+    async def test_profile_without_auth(self, client):
+        resp = await client.get("/api/auth/profile")
         assert resp.status_code == 401
 
-    def test_protected_endpoint_requires_auth(self, client):
+    @pytest.mark.asyncio
+    async def test_protected_endpoint_requires_auth(self, client):
         # /api/settings 应该需要认证
-        resp = client.get("/api/settings")
+        resp = await client.get("/api/settings")
         assert resp.status_code == 401
 
-    def test_protected_endpoint_with_auth(self, client):
-        reg = client.post(
+    @pytest.mark.asyncio
+    async def test_protected_endpoint_with_auth(self, client):
+        reg = await client.post(
             "/api/auth/register",
             json={"username": "protected", "password": "Pass1234!"},
         )
         access_token = reg.json()["access_token"]
-        resp = client.get(
+        resp = await client.get(
             "/api/settings",
             headers={"Authorization": f"Bearer {access_token}"},
         )

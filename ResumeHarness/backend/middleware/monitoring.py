@@ -12,8 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger("resume_agent.monitor")
 
@@ -34,41 +33,48 @@ class _RequestMetrics:
     status_counts: dict[int, int] = field(default_factory=lambda: defaultdict(int))
 
 
-class MonitoringMiddleware(BaseHTTPMiddleware):
-    """基础监控中间件。
+class MonitoringMiddleware:
+    """基础监控中间件（纯 ASGI 实现）。
 
     收集请求量、延迟、错误率指标，定期输出汇总日志。
     """
 
-    def __init__(self, app, log_interval: int = 60) -> None:
-        super().__init__(app)
+    def __init__(self, app: ASGIApp, log_interval: int = 60) -> None:
+        self.app = app
         self._metrics = _RequestMetrics()
         self._log_interval = log_interval
         self._lock = asyncio.Lock()
         self._log_task: asyncio.Task | None = None
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        path = request.url.path
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
 
         # 非 API 路径不监控
         if not path.startswith("/api/"):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         start_time = time.monotonic()
-        response: Response | None = None
+        status_code = 200
         error_occurred = False
 
+        async def send_wrapper(message: dict) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 200)
+            await send(message)
+
         try:
-            response = await call_next(request)
-            return response
+            await self.app(scope, receive, send_wrapper)
         except Exception:
             error_occurred = True
             raise
         finally:
             elapsed_ms = (time.monotonic() - start_time) * 1000
-            status_code = response.status_code if response else 500
 
             async with self._lock:
                 m = self._metrics

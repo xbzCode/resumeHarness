@@ -13,7 +13,6 @@ from fastapi.responses import StreamingResponse
 
 from resume_agent.api.errors import RateLimitFailure
 from resume_agent.engine.stream_events import (
-    ApiRetryEvent,
     AssistantTextDelta,
     AssistantTurnComplete,
     ErrorEvent,

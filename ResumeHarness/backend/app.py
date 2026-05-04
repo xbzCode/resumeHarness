@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
         raise
 
     # 初始化数据库
-    db = get_db()
+    db = await get_db()
     logger.info("数据库已初始化")
 
     # 初始化 MCP 工具
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
         logger.info("会话池已关闭")
 
     # 关闭数据库
-    close_db()
+    await close_db()
     logger.info("数据库已关闭")
 
 
@@ -119,31 +119,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # JWT 认证中间件（在 CORS 之后添加，这样 CORS preflight 不受影响）
-    app.add_middleware(AuthMiddleware)
-
-    # 速率限制中间件（在认证之后，可读取 user_id）
-    if settings.rate_limit_enabled:
-        app.add_middleware(RateLimitMiddleware, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
-        # 创建独立实例供状态 API 使用（与中间件内部独立，仅用于查询）
-        _rate_limit_middleware = RateLimitMiddleware(app, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
-        logger.info("速率限制中间件已启用 (rpm=%d)", settings.rate_limit_rpm)
-
-    # 监控中间件（最外层，记录所有请求）
-    if settings.monitor_enabled:
-        app.add_middleware(MonitoringMiddleware, log_interval=settings.monitor_log_interval)
-        _monitoring_middleware = MonitoringMiddleware(app, log_interval=settings.monitor_log_interval)
-        logger.info("监控中间件已启用 (interval=%ds)", settings.monitor_log_interval)
-
     # 注册路由
     from backend.routes.admin import router as admin_router
     from backend.routes.auth import router as auth_router
@@ -157,6 +132,39 @@ def create_app() -> FastAPI:
     app.include_router(memory_router, prefix="/api")
     app.include_router(resume_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
+
+    # -----------------------------------------------------------------------
+    # 中间件栈（从内到外：CORS → Auth → RateLimit → Monitoring）
+    # 使用纯 ASGI 中间件替代 BaseHTTPMiddleware，避免 body 消费导致的挂起问题
+    # 注意：app.add_middleware 添加顺序是"后添加的先执行"，所以最外层的先 add
+    # -----------------------------------------------------------------------
+
+    # 监控中间件（最外层，记录所有请求）
+    if settings.monitor_enabled:
+        app.add_middleware(MonitoringMiddleware, log_interval=settings.monitor_log_interval)
+        _monitoring_middleware = MonitoringMiddleware(app, log_interval=settings.monitor_log_interval)
+        logger.info("监控中间件已启用 (interval=%ds)", settings.monitor_log_interval)
+
+    # 速率限制中间件（在认证之后，可读取 user_id）
+    if settings.rate_limit_enabled:
+        app.add_middleware(RateLimitMiddleware, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
+        _rate_limit_middleware = RateLimitMiddleware(app, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
+        logger.info("速率限制中间件已启用 (rpm=%d)", settings.rate_limit_rpm)
+
+    # JWT 认证中间件（在 CORS 之后，CORS preflight 不受影响）
+    app.add_middleware(AuthMiddleware)
+
+    # CORS — 使用可配置的白名单
+    cors_origins = settings.cors_allowed_origins
+    if not cors_origins:
+        cors_origins = ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # 前端由独立的 Next.js 服务提供（P2-3 起），生产环境通过 Nginx 反向代理
     # 不再挂载 StaticFiles

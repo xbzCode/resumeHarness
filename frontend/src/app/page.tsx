@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FileText, Sparkles, Zap, Shield } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function HomePage() {
   return (
@@ -13,6 +14,7 @@ export default function HomePage() {
             <span className="text-lg font-semibold">Resume Agent</span>
           </div>
           <nav className="flex items-center gap-2">
+            <ThemeToggle className="h-8 w-8" />
             <Link href="/login">
               <Button variant="ghost" size="sm">登录</Button>
             </Link>
