@@ -29,6 +29,9 @@ class McpServerConfig(BaseModel):
     url: str = ""
     headers: dict[str, str] = Field(default_factory=dict)
     enabled: bool = True  # 是否启用
+    description: str = ""  # 服务器描述
+    auto_reconnect: bool = True  # 是否自动重连
+    health_check_interval: int = 0  # 健康检查间隔（秒），0=不检查
 
 
 # 默认 MCP 服务器配置
@@ -105,6 +108,12 @@ class ResumeAgentSettings(BaseModel):
     # MCP 服务器配置
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
 
+    # 外部技能目录（逗号分隔的路径列表）
+    extra_skill_dirs: str = Field(
+        default="",
+        description="外部技能目录路径（逗号分隔），用于加载用户自定义技能文件",
+    )
+
     @property
     def data_root(self) -> Path:
         """获取数据根目录。"""
@@ -115,10 +124,13 @@ class ResumeAgentSettings(BaseModel):
 
     @property
     def effective_api_keys(self) -> list[str]:
-        """获取有效的 API Key 列表（合并 api_key 和 api_keys）。"""
+        """获取有效的 API Key 列表（合并 api_key 和 api_keys）。
+
+        环境变量优先级：LLM_API_KEY > DEEPSEEK_API_KEY（向后兼容）
+        """
         keys = list(self.api_keys)
-        # 环境变量中的 key
-        env_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        # 供应商中立环境变量优先
+        env_key = os.environ.get("LLM_API_KEY", "") or os.environ.get("DEEPSEEK_API_KEY", "")
         if env_key and env_key not in keys:
             keys.insert(0, env_key)
         # settings 中的单 key
@@ -128,13 +140,27 @@ class ResumeAgentSettings(BaseModel):
 
     @property
     def effective_base_url(self) -> str:
-        """获取有效的 Base URL。"""
-        return os.environ.get("DEEPSEEK_BASE_URL", "") or self.base_url
+        """获取有效的 Base URL。
+
+        环境变量优先级：LLM_BASE_URL > DEEPSEEK_BASE_URL（向后兼容）
+        """
+        return (
+            os.environ.get("LLM_BASE_URL", "")
+            or os.environ.get("DEEPSEEK_BASE_URL", "")
+            or self.base_url
+        )
 
     @property
     def effective_model(self) -> str:
-        """获取有效的模型名。"""
-        return os.environ.get("DEEPSEEK_MODEL", "") or self.model
+        """获取有效的模型名。
+
+        环境变量优先级：LLM_MODEL > DEEPSEEK_MODEL（向后兼容）
+        """
+        return (
+            os.environ.get("LLM_MODEL", "")
+            or os.environ.get("DEEPSEEK_MODEL", "")
+            or self.model
+        )
 
     def get_user_dir(self, user_id: str) -> Path:
         """获取用户数据目录。"""
@@ -199,8 +225,8 @@ def load_settings() -> ResumeAgentSettings:
 
     settings = ResumeAgentSettings.model_validate(raw)
 
-    # 应用环境变量覆盖
-    env_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    # 应用环境变量覆盖（供应商中立变量优先，DEEPSEEK_* 向后兼容）
+    env_key = os.environ.get("LLM_API_KEY", "") or os.environ.get("DEEPSEEK_API_KEY", "")
     if env_key:
         settings = settings.model_copy(update={"api_key": env_key})
 

@@ -1,3 +1,15 @@
+---
+name: resume-skill
+version: "1.0.0"
+category: 通用技能
+tags: [简历优化, ATS, STAR法则, 量化成果, 关键词匹配]
+industry: []
+depends: []
+token_budget: 3000
+author: ResumeAgent
+description: 简历优化通用领域技能，包含 ATS 友好、STAR 法则、量化成果、关键词匹配等核心策略
+---
+
 # 简历优化领域技能
 
 ## 核心原则

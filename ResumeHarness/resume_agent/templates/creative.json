@@ -1,0 +1,19 @@
+{
+  "name": "creative",
+  "version": "1.0.0",
+  "display_name": "创意排版",
+  "description": "卡片式布局，渐变 Hero 头部+圆角卡片+技能标签，适用于设计/市场/创意行业",
+  "author": "ResumeAgent",
+  "layout": "card",
+  "color_scheme": {
+    "primary": "#667eea",
+    "accent": "#764ba2",
+    "background": "#f8f9fa"
+  },
+  "recommended_industries": ["design", "marketing", "creative", "media"],
+  "required_fields": ["name", "experience"],
+  "optional_fields": ["projects", "skills"],
+  "supports_dark_mode": false,
+  "page_size": "A4",
+  "preview": "preview.png"
+}

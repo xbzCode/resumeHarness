@@ -132,7 +132,7 @@ function MessageBubble({
   }, [templateHint]);
 
   return (
-    <div className={cn("flex gap-3 px-4 py-3", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex gap-3 px-4 py-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
           <Bot className="h-4 w-4 text-primary" />

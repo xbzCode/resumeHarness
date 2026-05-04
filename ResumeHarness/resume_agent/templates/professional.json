@@ -1,0 +1,19 @@
+{
+  "name": "professional",
+  "version": "1.0.0",
+  "display_name": "简洁商务",
+  "description": "双栏侧边栏布局，深色侧边栏+白色主内容区，适用于互联网/科技行业",
+  "author": "ResumeAgent",
+  "layout": "two-column",
+  "color_scheme": {
+    "primary": "#1e293b",
+    "accent": "#3b82f6",
+    "background": "#ffffff"
+  },
+  "recommended_industries": ["tech", "internet", "engineering"],
+  "required_fields": ["name", "experience"],
+  "optional_fields": ["projects", "summary"],
+  "supports_dark_mode": false,
+  "page_size": "A4",
+  "preview": "preview.png"
+}

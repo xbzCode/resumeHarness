@@ -173,7 +173,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </Sheet>
 
       {/* 主内容区 */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden animate-in fade-in-0 duration-200">
         <AuthGuard>{children}</AuthGuard>
       </main>
     </div>

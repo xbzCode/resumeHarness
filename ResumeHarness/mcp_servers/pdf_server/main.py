@@ -57,6 +57,13 @@ async def tools_list() -> dict[str, Any]:
                 "name": "convert",
                 "description": "将 HTML 内容转换为 PDF 文件，返回 base64 编码的 PDF 数据",
                 "inputSchema": ConvertInput.model_json_schema(),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "category": "文件转换",
+                    "timeout_ms": 60000,
+                },
             }
         ]
     }

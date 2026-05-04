@@ -93,6 +93,8 @@ class McpToolWrapper(BaseTool):
         self.name = f"mcp__{server_name}__{tool_info.name}"
         self.description = tool_info.description or f"MCP 工具: {tool_info.name}"
         self.input_model = _create_input_model(tool_info)
+        self.category = tool_info.annotations.category or "MCP代理"
+        self.is_read_only_default = tool_info.annotations.read_only_hint
 
     async def execute(self, arguments: BaseModel, context: ToolExecutionContext) -> ToolResult:
         """执行 MCP 工具调用。
@@ -146,13 +148,10 @@ class McpToolWrapper(BaseTool):
     def is_read_only(self, arguments: BaseModel) -> bool:
         """判断工具是否只读。
 
-        PDF 转换为只读，邮件发送为写操作。
+        优先从 MCP ToolSpec 的 annotations.readOnlyHint 读取。
+        未声明 annotations 时默认 false（安全降级）。
         """
-        # 邮件发送等有副作用的工具标记为非只读
-        if "send" in self._tool_info.name.lower() or "email" in self._server_name.lower():
-            return False
-        # PDF 转换等查询类工具标记为只读
-        return True
+        return self._tool_info.annotations.read_only_hint
 
     def to_api_schema(self) -> dict[str, Any]:
         """返回工具的 API Schema。"""

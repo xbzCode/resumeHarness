@@ -12,7 +12,7 @@ from resume_agent.memory.paths import get_user_memory_dir, ensure_user_dirs
 log = logging.getLogger(__name__)
 
 # 允许 LLM 通过 memory_write 写入的文件名
-WRITABLE_MEMORY_FILES = {"职业偏好.md", "技能标签.md", "优化历史.md"}
+WRITABLE_MEMORY_FILES = {"职业偏好.md", "技能标签.md", "优化历史.md", "custom_instructions.md"}
 
 # 简历原文不允许 LLM 修改
 PROTECTED_MEMORY_FILES = {"简历原文.md"}

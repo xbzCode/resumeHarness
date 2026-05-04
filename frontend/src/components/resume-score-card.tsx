@@ -55,7 +55,7 @@ export function ResumeScoreCard({ score }: ResumeScoreCardProps) {
   const level = getScoreLevel(score.overall_score);
 
   return (
-    <div className={cn("rounded-lg border p-3", level.bg)}>
+    <div className={cn("rounded-lg border p-3 animate-in fade-in-0 slide-in-from-bottom-3 duration-300", level.bg)}>
       {/* 总分 + 展开/收起 */}
       <button
         type="button"

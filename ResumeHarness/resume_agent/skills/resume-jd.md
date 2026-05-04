@@ -1,3 +1,15 @@
+---
+name: resume-jd
+version: "1.0.0"
+category: JD 解析技能
+tags: [JD解析, 岗位描述, 关键词提取, 匹配度评估]
+industry: []
+depends: [resume-skill]
+token_budget: 2000
+author: ResumeAgent
+description: JD 解析技能，指导从职位描述中结构化提取硬技能/软技能/行业术语
+---
+
 # JD 解析专项技能
 
 ## 概述

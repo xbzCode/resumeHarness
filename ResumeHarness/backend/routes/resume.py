@@ -34,24 +34,24 @@ def _get_user_id(request: Request) -> str:
 
 @router.get("/resume/templates")
 async def get_resume_templates() -> dict[str, Any]:
-    """获取可用简历模板列表。"""
+    """获取可用简历模板列表（从注册表动态发现）。"""
+    from resume_agent.templates.registry import list_templates
+
+    templates = list_templates()
     return {
         "templates": [
             {
-                "name": "professional",
-                "label": "简洁商务",
-                "description": "适用于互联网/科技行业",
-            },
-            {
-                "name": "academic",
-                "label": "学术风格",
-                "description": "适用于高校/研究所",
-            },
-            {
-                "name": "creative",
-                "label": "创意排版",
-                "description": "适用于设计/市场",
-            },
+                "name": t["name"],
+                "label": t.get("display_name", t["name"]),
+                "description": t.get("description", ""),
+                "version": t.get("version", "1.0.0"),
+                "layout": t.get("layout", ""),
+                "recommended_industries": t.get("recommended_industries", []),
+                "color_scheme": t.get("color_scheme", {}),
+                "has_preview": t.get("has_preview", False),
+            }
+            for t in templates
+            if t.get("has_html")
         ]
     }
 

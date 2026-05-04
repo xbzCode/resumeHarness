@@ -1,0 +1,19 @@
+{
+  "name": "academic",
+  "version": "1.0.0",
+  "display_name": "学术风",
+  "description": "传统单栏居中布局，居中姓名+装饰线，教育背景优先，适用于高校/研究所",
+  "author": "ResumeAgent",
+  "layout": "single-column",
+  "color_scheme": {
+    "primary": "#1a1a2e",
+    "accent": "#c0392b",
+    "background": "#ffffff"
+  },
+  "recommended_industries": ["education", "research", "academic"],
+  "required_fields": ["name", "education"],
+  "optional_fields": ["experience", "projects"],
+  "supports_dark_mode": false,
+  "page_size": "A4",
+  "preview": "preview.png"
+}

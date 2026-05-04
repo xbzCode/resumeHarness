@@ -280,6 +280,13 @@ async def tools_list() -> dict[str, Any]:
                     "当用户提供招聘链接时，应使用此工具获取详细的岗位描述。"
                 ),
                 "inputSchema": ScrapeJdInput.model_json_schema(),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "category": "网络抓取",
+                    "timeout_ms": 30000,
+                },
             }
         ]
     }

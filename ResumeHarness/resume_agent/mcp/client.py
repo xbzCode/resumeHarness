@@ -22,12 +22,25 @@ _MCP_TIMEOUT = 30.0
 _MCP_CALL_TIMEOUT = 120.0
 
 
+class McpToolAnnotations(BaseModel):
+    """MCP 工具注解（从 ToolSpec 的 annotations 字段解析）。"""
+
+    read_only_hint: bool = Field(default=False, alias="readOnlyHint")
+    destructive_hint: bool = Field(default=False, alias="destructiveHint")
+    idempotent_hint: bool | None = Field(default=None, alias="idempotentHint")
+    category: str = ""
+    timeout_ms: int | None = Field(default=None, alias="timeout_ms")
+
+    model_config = {"populate_by_name": True}
+
+
 class McpToolInfo(BaseModel):
     """MCP 工具元信息。"""
 
     name: str
     description: str = ""
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    annotations: McpToolAnnotations = Field(default_factory=McpToolAnnotations)
 
 
 class McpCallResult(BaseModel):
@@ -143,10 +156,21 @@ class McpHttpClient:
             tools_data = data.get("tools", [])
             self._tools = []
             for tool_data in tools_data:
+                # 解析 annotations
+                annotations_data = tool_data.get("annotations", {})
+                annotations = McpToolAnnotations(
+                    read_only_hint=annotations_data.get("readOnlyHint", False),
+                    destructive_hint=annotations_data.get("destructiveHint", False),
+                    idempotent_hint=annotations_data.get("idempotentHint"),
+                    category=annotations_data.get("category", ""),
+                    timeout_ms=annotations_data.get("timeout_ms"),
+                )
+
                 tool_info = McpToolInfo(
                     name=tool_data.get("name", ""),
                     description=tool_data.get("description", ""),
                     input_schema=tool_data.get("inputSchema", tool_data.get("input_schema", {})),
+                    annotations=annotations,
                 )
                 if tool_info.name:
                     self._tools.append(tool_info)

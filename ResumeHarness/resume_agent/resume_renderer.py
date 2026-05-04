@@ -22,6 +22,12 @@ log = logging.getLogger(__name__)
 # 可用模板列表
 AVAILABLE_TEMPLATES = ["professional", "academic", "creative"]
 
+
+def get_available_templates() -> list[str]:
+    """获取可用模板列表（从注册表动态发现）。"""
+    from resume_agent.templates.registry import list_templates
+    return [t["name"] for t in list_templates() if t.get("has_html")]
+
 # 行业→模板推荐映射
 # 根据行业/岗位特征推荐最合适的简历模板
 INDUSTRY_TEMPLATE_MAP: dict[str, str] = {
@@ -577,6 +583,9 @@ def get_template_hint(industry: str | None = None, jd_text: str | None = None) -
 def get_industry_skill_name(industry: str | None = None, jd_text: str | None = None) -> str | None:
     """根据行业或 JD 内容推荐应加载的行业技能文件名。
 
+    从技能文件的 Front Matter `industry` 字段自动构建映射，
+    不再硬编码行业→技能文件映射。
+
     Args:
         industry: 行业标识符（如 "tech"、"finance"），可选
         jd_text: JD 文本内容，用于推断行业，可选
@@ -584,14 +593,9 @@ def get_industry_skill_name(industry: str | None = None, jd_text: str | None = N
     Returns:
         技能文件名（不含 .md 后缀），如 "resume-tech"，无匹配时返回 None
     """
-    # 行业→技能文件映射
-    industry_skill_map: dict[str, str] = {
-        "tech": "resume-tech",
-        "internet": "resume-tech",
-        "finance": "resume-finance",
-        "banking": "resume-finance",
-        "insurance": "resume-finance",
-    }
+    from resume_agent.skills.resume_skill import get_industry_skill_map
+
+    industry_skill_map = get_industry_skill_map()
 
     effective_industry = industry
 
@@ -599,10 +603,8 @@ def get_industry_skill_name(industry: str | None = None, jd_text: str | None = N
         effective_industry = detect_industry_from_text(jd_text)
 
     if effective_industry and effective_industry in industry_skill_map:
-        skill_name = industry_skill_map[effective_industry]
-        # 检查技能文件是否存在
-        skill_path = Path(__file__).parent / "skills" / f"{skill_name}.md"
-        if skill_path.exists():
-            return skill_name
+        skill_names = industry_skill_map[effective_industry]
+        if skill_names:
+            return skill_names[0]  # 返回第一个匹配的技能
 
     return None

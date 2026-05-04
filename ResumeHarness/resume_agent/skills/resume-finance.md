@@ -1,3 +1,15 @@
+---
+name: resume-finance
+version: "1.0.0"
+category: 行业技能
+tags: [金融, 银行, 证券, 保险, 基金, 金融科技]
+industry: [finance, banking]
+depends: [resume-skill]
+token_budget: 4000
+author: ResumeAgent
+description: 金融行业专项技能，包含银行/证券/保险关键词分类、专业资质展示和量化策略
+---
+
 # 金融行业简历专项技能
 
 ## 行业概述

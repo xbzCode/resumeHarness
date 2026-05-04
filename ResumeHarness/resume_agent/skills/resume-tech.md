@@ -1,3 +1,15 @@
+---
+name: resume-tech
+version: "1.0.0"
+category: 行业技能
+tags: [互联网, 科技, 前端, 后端, AI, 算法, 产品运营]
+industry: [tech, internet]
+depends: [resume-skill]
+token_budget: 4000
+author: ResumeAgent
+description: 互联网/科技行业专项技能，包含前后端/AI/产品运营关键词分类和量化策略
+---
+
 # 互联网/科技行业简历专项技能
 
 ## 行业概述

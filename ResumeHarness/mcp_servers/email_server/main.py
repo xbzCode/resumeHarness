@@ -127,6 +127,13 @@ async def tools_list() -> dict[str, Any]:
                 "name": "send",
                 "description": "发送邮件，支持 HTML 正文和附件",
                 "inputSchema": SendInput.model_json_schema(),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": False,
+                    "category": "邮件发送",
+                    "timeout_ms": 30000,
+                },
             }
         ]
     }
