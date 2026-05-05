@@ -94,6 +94,18 @@ class SseThinkingDelta:
 
 
 @dataclass(frozen=True)
+class SseContentToThinking:
+    """通知前端将已积累的 content 文本转移到 thinking 区域。
+
+    当流式输出中检测到 <!--RESUME--> 标记时发送，
+    前端应将当前消息的 content 移至 thinking，并清空 content，
+    后续的文本增量将作为简历正文填充到 content 中。
+    """
+
+    type: Literal["content_to_thinking"] = "content_to_thinking"
+
+
+@dataclass(frozen=True)
 class SseSessionStarted:
     """会话开始通知，携带 session_id。"""
 
@@ -134,6 +146,7 @@ SseEvent = (
     | SseResumeScore
     | SseConnectionTimeout
     | SseThinkingDelta
+    | SseContentToThinking
     | SseSessionStarted
 )
 
@@ -172,6 +185,8 @@ def sse_event_to_dict(event: SseEvent) -> dict[str, Any]:
             result["resume_prefix"] = event.resume_prefix
     elif isinstance(event, SseThinkingDelta):
         result["text"] = event.text
+    elif isinstance(event, SseContentToThinking):
+        pass  # 无附加字段
     elif isinstance(event, SseResumeScore):
         result["resume_id"] = event.resume_id
         result["score"] = event.score

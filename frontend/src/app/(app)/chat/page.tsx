@@ -376,6 +376,7 @@ export default function ChatPage() {
     addMessage,
     appendToLastMessage,
     appendToLastMessageThinking,
+    moveContentToThinking,
     setStreaming,
     setAbortController,
     clearMessages,
@@ -468,6 +469,9 @@ export default function ChatPage() {
         case "thinking_delta":
           appendToLastMessageThinking(data.text || "");
           break;
+        case "content_to_thinking":
+          moveContentToThinking();
+          break;
         case "text_delta":
           appendToLastMessage(data.text || "");
           break;
@@ -519,7 +523,7 @@ export default function ChatPage() {
           break;
       }
     },
-    [appendToLastMessage, appendToLastMessageThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setResumeScoreOnLastMessage, setSessionId],
+    [appendToLastMessage, appendToLastMessageThinking, moveContentToThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setResumeScoreOnLastMessage, setSessionId],
   );
 
   // 发送消息

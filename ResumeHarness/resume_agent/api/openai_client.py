@@ -304,20 +304,17 @@ class OpenAICompatibleClient:
             raise self._translate_error(last_error) from last_error
 
     async def _stream_once(self, request: ApiMessageRequest) -> AsyncIterator[ApiStreamEvent]:
-        """Single attempt: stream an OpenAI chat completion."""
+        """Single attempt: stream an OpenAI chat completion.
+
+        当 finish_reason=length 时自动续写，避免长输出被截断。
+        """
         openai_messages = _convert_messages_to_openai(request.messages, request.system_prompt)
         openai_tools = _convert_tools_to_openai(request.tools) if request.tools else None
 
-        params: dict[str, Any] = {
-            "model": request.model,
-            "messages": openai_messages,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-        }
-        params.update(_token_limit_param_for_model(request.model, request.max_tokens))
-        if openai_tools:
-            params["tools"] = openai_tools
-            params.pop("stream_options", None)
+        # 自动续写：当 finish_reason=length 时，将已输出内容追加到消息列表，
+        # 发送"继续"提示让模型补全剩余内容。最多续写 5 次。
+        max_continuations = 5
+        continuation_count = 0
 
         collected_content = ""
         collected_reasoning = ""
@@ -325,54 +322,113 @@ class OpenAICompatibleClient:
         finish_reason: str | None = None
         usage_data: dict[str, int] = {}
 
-        stream = await self._client.chat.completions.create(**params)
-        async for chunk in stream:
-            if not chunk.choices:
+        # 构建当前轮次的请求消息（续写时会追加）
+        current_messages = list(openai_messages)
+
+        while True:
+            params: dict[str, Any] = {
+                "model": request.model,
+                "messages": current_messages,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+            params.update(_token_limit_param_for_model(request.model, request.max_tokens))
+            if openai_tools:
+                params["tools"] = openai_tools
+                params.pop("stream_options", None)
+
+            round_content = ""
+            round_reasoning = ""
+            round_tool_calls: dict[int, dict[str, Any]] = {}
+            round_finish: str | None = None
+
+            stream = await self._client.chat.completions.create(**params)
+            async for chunk in stream:
+                if not chunk.choices:
+                    if chunk.usage:
+                        usage_data = {
+                            "input_tokens": usage_data.get("input_tokens", 0) + (chunk.usage.prompt_tokens or 0),
+                            "output_tokens": usage_data.get("output_tokens", 0) + (chunk.usage.completion_tokens or 0),
+                        }
+                    continue
+
+                delta = chunk.choices[0].delta
+                chunk_finish = chunk.choices[0].finish_reason
+
+                if chunk_finish:
+                    round_finish = chunk_finish
+
+                reasoning_piece = getattr(delta, "reasoning_content", None) or ""
+                if reasoning_piece:
+                    round_reasoning += reasoning_piece
+                    collected_reasoning += reasoning_piece
+                    yield ApiReasoningDeltaEvent(text=reasoning_piece)
+
+                if delta.content:
+                    round_content += delta.content
+                    collected_content += delta.content
+                    yield ApiTextDeltaEvent(text=delta.content)
+
+                if delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in round_tool_calls:
+                            round_tool_calls[idx] = {
+                                "id": tc_delta.id or "",
+                                "name": "",
+                                "arguments": "",
+                            }
+                        entry = round_tool_calls[idx]
+                        if tc_delta.id:
+                            entry["id"] = tc_delta.id
+                        if tc_delta.function:
+                            if tc_delta.function.name:
+                                entry["name"] = tc_delta.function.name
+                            if tc_delta.function.arguments:
+                                entry["arguments"] += tc_delta.function.arguments
+
                 if chunk.usage:
                     usage_data = {
-                        "input_tokens": chunk.usage.prompt_tokens or 0,
-                        "output_tokens": chunk.usage.completion_tokens or 0,
+                        "input_tokens": usage_data.get("input_tokens", 0) + (chunk.usage.prompt_tokens or 0),
+                        "output_tokens": usage_data.get("output_tokens", 0) + (chunk.usage.completion_tokens or 0),
                     }
+
+            # 合并本轮的 tool_calls
+            for idx, tc in round_tool_calls.items():
+                if idx not in collected_tool_calls:
+                    collected_tool_calls[idx] = tc
+                else:
+                    existing = collected_tool_calls[idx]
+                    if tc["id"]:
+                        existing["id"] = tc["id"]
+                    if tc["name"]:
+                        existing["name"] = tc["name"]
+                    if tc["arguments"]:
+                        existing["arguments"] += tc["arguments"]
+
+            finish_reason = round_finish
+
+            # 检查是否需要续写：finish_reason=length 且没有 tool_calls
+            if (
+                round_finish == "length"
+                and not round_tool_calls
+                and continuation_count < max_continuations
+            ):
+                continuation_count += 1
+                log.info(
+                    "输出被 max_tokens 截断（finish_reason=length），自动续写第 %d 次",
+                    continuation_count,
+                )
+                # 将已输出的 assistant 消息追加到上下文
+                assistant_msg: dict[str, Any] = {"role": "assistant", "content": round_content}
+                if round_reasoning:
+                    assistant_msg["reasoning_content"] = round_reasoning
+                current_messages.append(assistant_msg)
+                # 追加"继续"提示
+                current_messages.append({"role": "user", "content": "请继续输出，不要重复已经输出的内容。"})
                 continue
-
-            delta = chunk.choices[0].delta
-            chunk_finish = chunk.choices[0].finish_reason
-
-            if chunk_finish:
-                finish_reason = chunk_finish
-
-            reasoning_piece = getattr(delta, "reasoning_content", None) or ""
-            if reasoning_piece:
-                collected_reasoning += reasoning_piece
-                yield ApiReasoningDeltaEvent(text=reasoning_piece)
-
-            if delta.content:
-                collected_content += delta.content
-                yield ApiTextDeltaEvent(text=delta.content)
-
-            if delta.tool_calls:
-                for tc_delta in delta.tool_calls:
-                    idx = tc_delta.index
-                    if idx not in collected_tool_calls:
-                        collected_tool_calls[idx] = {
-                            "id": tc_delta.id or "",
-                            "name": "",
-                            "arguments": "",
-                        }
-                    entry = collected_tool_calls[idx]
-                    if tc_delta.id:
-                        entry["id"] = tc_delta.id
-                    if tc_delta.function:
-                        if tc_delta.function.name:
-                            entry["name"] = tc_delta.function.name
-                        if tc_delta.function.arguments:
-                            entry["arguments"] += tc_delta.function.arguments
-
-            if chunk.usage:
-                usage_data = {
-                    "input_tokens": chunk.usage.prompt_tokens or 0,
-                    "output_tokens": chunk.usage.completion_tokens or 0,
-                }
+            else:
+                break
 
         content: list[ContentBlock] = []
         if collected_content:

@@ -63,17 +63,34 @@ export default function MemoryPage() {
   async function handleSave() {
     if (!token || !selected) return;
     try {
-      const api = createAuthApi(token);
-      await api(`/api/memory/${encodeURIComponent(selected)}`, {
-        method: "PUT",
-        body: { content: editContent, mode: "replace" },
-      });
+      if (selected === "简历原文.md") {
+        // 简历原文需要通过 upload 接口更新
+        const blob = new Blob([editContent], { type: "text/markdown" });
+        const file = new File([blob], "简历原文.md", { type: "text/markdown" });
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`${API_BASE}/api/memory/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `保存失败: HTTP ${res.status}`);
+        }
+      } else {
+        const api = createAuthApi(token);
+        await api(`/api/memory/${encodeURIComponent(selected)}`, {
+          method: "PUT",
+          body: { content: editContent, mode: "replace" },
+        });
+      }
       setContent(editContent);
       setEditing(false);
       toast.success("保存成功");
       loadMemories();
-    } catch {
-      toast.error("保存失败");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存失败");
     }
   }
 

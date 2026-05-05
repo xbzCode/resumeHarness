@@ -64,7 +64,7 @@ class ResumeAgentSettings(BaseModel):
     api_key: str = ""
     api_keys: list[str] = Field(default_factory=list)
     timeout: float = 30.0
-    max_tokens: int = 4096
+    max_tokens: int = 8192
     context_window_tokens: int | None = None
     auto_compact_threshold_tokens: int | None = None
     max_turns: int = 200

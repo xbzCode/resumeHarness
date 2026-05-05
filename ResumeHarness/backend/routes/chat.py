@@ -27,6 +27,7 @@ from resume_agent.exceptions import RateLimitError
 from resume_agent.models.api_schemas import ChatRequest
 from resume_agent.models.sse_events import (
     SseAssistantTurnComplete,
+    SseContentToThinking,
     SseError,
     SsePing,
     SseResumeData,
@@ -303,16 +304,26 @@ class _StreamingMarkerFilter:
     """流式文本中过滤 <!--RESUME--> / <!--/RESUME--> 标记。
 
     标记可能被拆分到多个 text_delta 块中，需要缓冲检测。
+    当检测到 <!--RESUME--> 开标记时，设置 resume_marker_found=True，
+    调用方可据此发送 SseContentToThinking 事件。
     """
 
     _MAX_MARKER_LEN = len(_RESUME_MARKER_CLOSE)  # 15
 
     def __init__(self) -> None:
         self._tail = ""
+        self.resume_marker_found = False
 
     def feed(self, text: str) -> str:
-        """输入流式文本，返回过滤后的文本。"""
+        """输入流式文本，返回过滤后的文本。
+
+        当 <!--RESUME--> 首次被检测到时，设置 resume_marker_found=True。
+        """
         combined = self._tail + text
+
+        # 检测 <!--RESUME--> 开标记（首次发现时设置标志）
+        if not self.resume_marker_found and _RESUME_MARKER_OPEN in combined:
+            self.resume_marker_found = True
 
         # 替换完整标记
         combined = combined.replace(_RESUME_MARKER_OPEN, "")
@@ -358,6 +369,11 @@ async def _chat_stream(
             if isinstance(event, AssistantTextDelta):
                 filtered_text = marker_filter.feed(event.text)
                 if filtered_text:
+                    # 当 <!--RESUME--> 首次被发现时，通知前端将已积累的 content 转移到 thinking
+                    if marker_filter.resume_marker_found:
+                        yield format_sse_data(SseContentToThinking())
+                        # 重置标志，避免重复发送
+                        marker_filter.resume_marker_found = False
                     yield format_sse_data(SseTextDelta(text=filtered_text))
             else:
                 sse_data = _stream_event_to_sse(event)

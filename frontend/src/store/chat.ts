@@ -91,6 +91,7 @@ interface ChatState {
   updateLastMessage: (content: string) => void;
   appendToLastMessage: (content: string) => void;
   appendToLastMessageThinking: (content: string) => void;
+  moveContentToThinking: () => void;
   setStreaming: (streaming: boolean) => void;
   setAbortController: (abort: (() => void) | null) => void;
   clearMessages: () => void;
@@ -176,6 +177,19 @@ export const useChatStore = create<ChatState>()(
           }
           return { messages: msgs };
         }),
+      moveContentToThinking: () =>
+        set((state) => {
+          const msgs = [...state.messages];
+          if (msgs.length > 0) {
+            const last = msgs[msgs.length - 1];
+            msgs[msgs.length - 1] = {
+              ...last,
+              thinking: (last.thinking || "") + last.content,
+              content: "",
+            };
+          }
+          return { messages: msgs };
+        }),
       setStreaming: (streaming) => set({ isStreaming: streaming }),
       setAbortController: (abort) => set({ abortController: abort }),
       clearMessages: () => set({ messages: [], sessionId: null }),
@@ -197,8 +211,21 @@ export const useChatStore = create<ChatState>()(
             const prevResumeContent = last.resumeData
               ? _resumeDataToMarkdown(last.resumeData)
               : undefined;
+            // 当 resumePrefix 有值时，将 content 中对应的前缀文本移到 thinking
+            // 这确保降级路径（模型未输出 <!--RESUME--> 标记）下也能正确分离引导语和简历内容
+            let newContent = last.content;
+            let newThinking = last.thinking || "";
+            if (resumePrefix && last.content.startsWith(resumePrefix)) {
+              newContent = last.content.slice(resumePrefix.length).trimStart();
+              newThinking = (newThinking + resumePrefix).trimStart();
+            } else if (resumePrefix && !newThinking.includes(resumePrefix)) {
+              // 前缀不完全匹配时（如流式传输中的微小差异），仍尝试移到 thinking
+              newThinking = (newThinking + "\n" + resumePrefix).trim();
+            }
             msgs[msgs.length - 1] = {
               ...last,
+              content: newContent,
+              thinking: newThinking || undefined,
               resumeId,
               resumeData: data,
               templateHint,
