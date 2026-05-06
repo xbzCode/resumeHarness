@@ -253,7 +253,10 @@ export const useChatStore = create<ChatState>()(
       // 只持久化这些字段，abortController 和 isStreaming 不持久化
       partialize: (state) => ({
         sessionId: state.sessionId,
-        messages: state.messages,
+        // 过滤掉流式传输残留的空消息（isStreaming 不持久化，空 assistant 消息无意义）
+        messages: state.messages.filter(
+          (m) => !(m.role === "assistant" && !m.content && !m.thinking && !m.resumeData),
+        ),
       }),
     },
   ),

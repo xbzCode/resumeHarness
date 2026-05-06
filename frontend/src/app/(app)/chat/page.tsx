@@ -6,7 +6,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
@@ -29,6 +28,8 @@ import {
   History,
   Plus,
   MessageSquare,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useChatStore } from "@/store/chat";
@@ -49,17 +50,16 @@ function generateId() {
 
 function ToolCallBadge({ name }: { name: string }) {
   return (
-    <Badge variant="secondary" className="gap-1 text-xs">
+    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
       <Wrench className="h-3 w-3" />
       {name}
-    </Badge>
+    </span>
   );
 }
 
 function ThinkingSection({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
   const [open, setOpen] = useState(false);
 
-  // 流式传输中有思考内容时自动展开
   useEffect(() => {
     if (streaming && thinking) {
       setOpen(true);
@@ -73,7 +73,7 @@ function ThinkingSection({ thinking, streaming }: { thinking: string; streaming?
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-1 text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
       >
         {open ? (
           <ChevronDown className="h-3 w-3" />
@@ -87,11 +87,49 @@ function ThinkingSection({ thinking, streaming }: { thinking: string; streaming?
         )}
       </button>
       {open && (
-        <div className="mt-1 rounded-md border border-dashed border-muted-foreground/30 bg-background/50 p-3 text-xs text-muted-foreground whitespace-pre-wrap">
+        <div className="mt-1.5 rounded-lg border border-dashed border-border/60 bg-muted/30 p-3 text-[12px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
           {thinking}
         </div>
       )}
     </div>
+  );
+}
+
+/** 复制消息内容按钮 */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // fallback for non-HTTPS
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("复制失败");
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 transition-all hover:bg-muted hover:text-muted-foreground"
+      title="复制"
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 
@@ -126,26 +164,35 @@ function MessageBubble({
   const [showPreview, setShowPreview] = useState(true);
   const [activeTemplate, setActiveTemplate] = useState(templateHint || "professional");
 
-  // 当 templateHint 变化时同步
   useEffect(() => {
     if (templateHint) setActiveTemplate(templateHint);
   }, [templateHint]);
 
+  // 收集所有可复制的文本内容
+  const copyableText = resumeData
+    ? content + (suggestions ? "\n\n" + suggestions : "")
+    : content;
+
   return (
-    <div className={cn("flex gap-3 px-4 py-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn(
+      "group flex gap-3 px-6 py-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-150",
+      isUser ? "justify-end" : "justify-start",
+    )}>
       {!isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
+          <Bot className="h-3.5 w-3.5 text-primary" />
         </div>
       )}
-      <div
-        className={cn(
-          "max-w-[80%] space-y-2 rounded-lg px-4 py-3",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted",
-        )}
-      >
+      {/* 内容区：纵向排列气泡 + 复制按钮 */}
+      <div className={cn("flex flex-col max-w-[85%] min-w-0")}>
+        <div
+          className={cn(
+            "group/msg relative min-w-0 space-y-2",
+            isUser
+              ? "rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground"
+              : "",
+          )}
+        >
         {!isUser && <ThinkingSection thinking={thinking || ""} streaming={isStreaming} />}
         {toolCalls && toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -156,103 +203,103 @@ function MessageBubble({
         )}
         {resumeData && showPreview ? (
           <>
-            {/* 前缀内容（标记前的引导语等） */}
             {resumePrefix && (
               <div className="prose prose-sm max-w-none dark:prose-invert">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{resumePrefix}</ReactMarkdown>
               </div>
             )}
-            {/* 简历预览组件 */}
-            <div className="space-y-2">
-              <ResumePreview data={resumeData} template={activeTemplate} />
-              {/* 简历评分卡片 */}
-              {resumeScore && <ResumeScoreCard score={resumeScore} />}
-              {/* 多轮优化差异对比 */}
-              {prevResumeContent && resumeData && (
-                <ResumeDiffView
-                  oldContent={prevResumeContent}
-                  newContent={(() => {
-                    const parts: string[] = [];
-                    parts.push(`# ${resumeData.name}`);
-                    const cp = [resumeData.contact.email, resumeData.contact.phone, resumeData.contact.location].filter(Boolean);
-                    if (cp.length > 0) parts.push(cp.join(" | "));
-                    if (resumeData.summary) { parts.push(""); parts.push("## 个人简介"); parts.push(resumeData.summary); }
-                    if (resumeData.experience.length > 0) {
-                      parts.push(""); parts.push("## 工作经历");
-                      for (const exp of resumeData.experience) {
-                        parts.push(`### ${exp.title} - ${exp.company}（${exp.period}）`);
-                        for (const h of exp.highlights) parts.push(`- ${h}`);
-                      }
-                    }
-                    return parts.join("\n");
-                  })()}
-                />
-              )}
-              {/* 模板切换 + 操作按钮 */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex gap-1 mr-2">
-                  {(["professional", "academic", "creative"] as const).map((tpl) => (
-                    <Button
-                      key={tpl}
-                      variant={activeTemplate === tpl ? "default" : "outline"}
-                      size="sm"
-                      className="gap-1 text-xs"
-                      onClick={() => setActiveTemplate(tpl)}
-                    >
-                      {tpl === "professional" ? "商务" : tpl === "academic" ? "学术" : "创意"}
-                    </Button>
-                  ))}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => setShowPreview(false)}
-                >
-                  查看原文
-                </Button>
-                {resumeId && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => window.open(`/resumes/${resumeId}`, "_blank")}
-                    >
-                      <FileText className="h-3 w-3" />
-                      详情
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => handleDownloadResume(resumeId)}
-                    >
-                      <Download className="h-3 w-3" />
-                      下载 PDF
-                    </Button>
-                  </>
-                )}
+            {/* 简历预览 - 响应式容器 */}
+            <div className="overflow-x-auto rounded-lg border bg-background -mx-1">
+              <div className="min-w-[600px]">
+                <ResumePreview data={resumeData} template={activeTemplate} />
               </div>
             </div>
-            {/* 后缀内容（优化建议等） */}
+            {resumeScore && <ResumeScoreCard score={resumeScore} />}
+            {prevResumeContent && resumeData && (
+              <ResumeDiffView
+                oldContent={prevResumeContent}
+                newContent={(() => {
+                  const parts: string[] = [];
+                  parts.push(`# ${resumeData.name}`);
+                  const cp = [resumeData.contact.email, resumeData.contact.phone, resumeData.contact.location].filter(Boolean);
+                  if (cp.length > 0) parts.push(cp.join(" | "));
+                  if (resumeData.summary) { parts.push(""); parts.push("## 个人简介"); parts.push(resumeData.summary); }
+                  if (resumeData.experience.length > 0) {
+                    parts.push(""); parts.push("## 工作经历");
+                    for (const exp of resumeData.experience) {
+                      parts.push(`### ${exp.title} - ${exp.company}（${exp.period}）`);
+                      for (const h of exp.highlights) parts.push(`- ${h}`);
+                    }
+                  }
+                  return parts.join("\n");
+                })()}
+              />
+            )}
+            {/* 操作按钮行 */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex gap-0.5 mr-1">
+                {(["professional", "academic", "creative"] as const).map((tpl) => (
+                  <Button
+                    key={tpl}
+                    variant={activeTemplate === tpl ? "secondary" : "ghost"}
+                    size="sm"
+                    className="gap-1 text-xs h-7 px-2"
+                    onClick={() => setActiveTemplate(tpl)}
+                  >
+                    {tpl === "professional" ? "商务" : tpl === "academic" ? "学术" : "创意"}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs h-7"
+                onClick={() => setShowPreview(false)}
+              >
+                查看原文
+              </Button>
+              {resumeId && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 text-xs h-7"
+                    onClick={() => window.open(`/resumes/${resumeId}`, "_blank")}
+                  >
+                    <FileText className="h-3 w-3" />
+                    详情
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 text-xs h-7"
+                    onClick={() => handleDownloadResume(resumeId)}
+                  >
+                    <Download className="h-3 w-3" />
+                    PDF
+                  </Button>
+                </>
+              )}
+            </div>
             {suggestions && (
               <div className="prose prose-sm max-w-none dark:prose-invert">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{suggestions}</ReactMarkdown>
               </div>
             )}
           </>
+        ) : isUser ? (
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{content}</p>
         ) : (
           <div className="prose prose-sm max-w-none dark:prose-invert">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </div>
         )}
         {resumeData && !showPreview && (
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-1.5 pt-1">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="gap-1"
+              className="gap-1 text-xs h-7"
               onClick={() => setShowPreview(true)}
             >
               简历预览
@@ -260,53 +307,66 @@ function MessageBubble({
             {resumeId && (
               <>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="gap-1"
+                  className="gap-1 text-xs h-7"
                   onClick={() => window.open(`/resumes/${resumeId}`, "_blank")}
                 >
                   <FileText className="h-3 w-3" />
                   详情
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="gap-1"
+                  className="gap-1 text-xs h-7"
                   onClick={() => handleDownloadResume(resumeId)}
                 >
                   <Download className="h-3 w-3" />
-                  下载 PDF
+                  PDF
                 </Button>
               </>
             )}
           </div>
         )}
         {!resumeData && resumeId && (
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-1.5 pt-1">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="gap-1"
+              className="gap-1 text-xs h-7"
               onClick={() => window.open(`/resumes/${resumeId}`, "_blank")}
             >
               <FileText className="h-3 w-3" />
               查看简历
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="gap-1"
+              className="gap-1 text-xs h-7"
               onClick={() => handleDownloadResume(resumeId)}
             >
               <Download className="h-3 w-3" />
-              下载 PDF
+              PDF
             </Button>
+          </div>
+        )}
+        {/* 助手消息复制按钮 - 左下角 */}
+        {!isUser && copyableText && (
+          <div className="flex justify-start pt-0.5">
+            <CopyButton text={copyableText} />
+          </div>
+        )}
+        </div>
+        {/* 用户消息复制按钮 - 气泡下方右对齐 */}
+        {isUser && copyableText && (
+          <div className="flex justify-end pt-0.5">
+            <CopyButton text={copyableText} />
           </div>
         )}
       </div>
       {isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary">
-          <User className="h-4 w-4 text-secondary-foreground" />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary mt-0.5">
+          <User className="h-3.5 w-3.5 text-secondary-foreground" />
         </div>
       )}
     </div>
@@ -346,7 +406,6 @@ function convertSessionMessages(sessionMsgs: SessionMessage[]) {
         // tool results 不单独显示
       }
     }
-    // 尝试提取 reasoning（如果有 _reasoning 字段）
     const reasoning = (msg as Record<string, unknown>)._reasoning;
     if (typeof reasoning === "string" && reasoning) {
       thinking = reasoning;
@@ -393,17 +452,14 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 自动滚动到底部
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 从 URL 参数恢复会话
   useEffect(() => {
     const sid = searchParams.get("sid");
     if (sid && sid !== sessionId && token) {
       setSessionId(sid);
-      // 如果当前没有消息，加载该会话的历史消息
       if (messages.length === 0) {
         loadSession(sid);
       }
@@ -411,7 +467,6 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, token]);
 
-  // 加载历史会话列表
   async function loadSessions() {
     if (!token) return;
     setLoadingSessions(true);
@@ -426,7 +481,6 @@ export default function ChatPage() {
     }
   }
 
-  // 打开历史面板时加载
   function handleOpenSheet(open: boolean) {
     setSheetOpen(open);
     if (open) {
@@ -434,7 +488,6 @@ export default function ChatPage() {
     }
   }
 
-  // 加载某个历史会话
   async function loadSession(sid: string) {
     if (!token) return;
     try {
@@ -454,7 +507,6 @@ export default function ChatPage() {
     }
   }
 
-  // 处理 SSE 事件
   const handleSSEEvent = useCallback(
     (event: MessageEvent) => {
       const data = event.data;
@@ -463,7 +515,6 @@ export default function ChatPage() {
       switch (data.type) {
         case "session_started":
           setSessionId(data.session_id);
-          // 更新 URL 为 /chat?sid=xxx（不产生额外历史记录）
           router.replace(`/chat?sid=${data.session_id}`, { scroll: false });
           break;
         case "thinking_delta":
@@ -476,14 +527,10 @@ export default function ChatPage() {
           appendToLastMessage(data.text || "");
           break;
         case "tool_execution_started":
-          appendToLastMessage(
-            `\n> 🔧 调用工具: ${data.tool_name}\n`,
-          );
+          appendToLastMessage(`\n> 🔧 调用工具: ${data.tool_name}\n`);
           break;
         case "tool_execution_completed":
-          appendToLastMessage(
-            `> ✅ ${data.tool_name} 完成${data.is_error ? "（出错）" : ""}\n`,
-          );
+          appendToLastMessage(`> ✅ ${data.tool_name} 完成${data.is_error ? "（出错）" : ""}\n`);
           break;
         case "status":
           appendToLastMessage(`\n> 📌 ${data.message}\n`);
@@ -526,7 +573,6 @@ export default function ChatPage() {
     [appendToLastMessage, appendToLastMessageThinking, moveContentToThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setResumeScoreOnLastMessage, setSessionId],
   );
 
-  // 发送消息
   async function handleSend() {
     const prompt = input.trim();
     if (!prompt || isStreaming || !token) return;
@@ -579,7 +625,6 @@ export default function ChatPage() {
     router.replace("/chat", { scroll: false });
   }
 
-  // Enter 发送，Shift+Enter 换行
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -587,7 +632,6 @@ export default function ChatPage() {
     }
   }
 
-  // 调整 textarea 高度
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -597,20 +641,21 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏 */}
-      <div className="flex h-12 items-center justify-between border-b px-4">
-        <h2 className="text-sm font-medium">
-          {sessionId ? `会话 ${sessionId.slice(0, 8)}` : "新对话"}
-        </h2>
+      {/* 顶栏 - 精简 */}
+      <div className="flex h-11 items-center justify-between border-b px-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {sessionId ? `${sessionId.slice(0, 8)}` : "新对话"}
+          </span>
+        </div>
         <div className="flex items-center gap-1">
-          {/* 历史会话 */}
           <Sheet open={sheetOpen} onOpenChange={handleOpenSheet}>
             <SheetTrigger
               render={
-                <Button variant="ghost" size="sm" className="gap-1" />
+                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7" />
               }
             >
-              <History className="h-4 w-4" />
+              <History className="h-3.5 w-3.5" />
               历史
             </SheetTrigger>
             <SheetContent side="left" className="w-80 p-0">
@@ -627,7 +672,7 @@ export default function ChatPage() {
                     暂无历史会话
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {sessions.map((s) => (
                       <button
                         key={s.session_id}
@@ -643,7 +688,7 @@ export default function ChatPage() {
                           <p className="truncate font-medium">
                             {s.summary || `会话 ${s.session_id.slice(0, 8)}`}
                           </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
                             {s.message_count} 条消息 · {new Date(s.created_at * 1000).toLocaleDateString()}
                           </p>
                         </div>
@@ -654,8 +699,8 @@ export default function ChatPage() {
               </div>
             </SheetContent>
           </Sheet>
-          <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1">
-            <Plus className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1 text-xs h-7">
+            <Plus className="h-3.5 w-3.5" />
             新对话
           </Button>
         </div>
@@ -664,12 +709,12 @@ export default function ChatPage() {
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 py-20 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-              <FileText className="h-8 w-8 text-primary" />
+          <div className="flex h-full flex-col items-center justify-center gap-5 py-20 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
+              <FileText className="h-7 w-7 text-primary/60" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Resume Agent</h3>
+              <h3 className="text-base font-medium">Resume Agent</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 输入你的简历和目标岗位，开始智能优化
               </p>
@@ -684,7 +729,7 @@ export default function ChatPage() {
                   key={suggestion}
                   variant="outline"
                   size="sm"
-                  className="text-xs"
+                  className="text-xs h-8"
                   onClick={() => {
                     setInput(suggestion);
                     textareaRef.current?.focus();
@@ -696,13 +741,12 @@ export default function ChatPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-1 py-2">
+          <div className="py-2">
             {messages.map((msg, idx) => {
               const isLastAssistantStreaming =
                 msg.role === "assistant" &&
                 idx === messages.length - 1 &&
                 isStreaming;
-              // 流式传输中，完全空的 assistant 消息由下方的"思考中..."替代，不单独渲染
               if (
                 isLastAssistantStreaming &&
                 !msg.content &&
@@ -729,15 +773,13 @@ export default function ChatPage() {
               );
             })}
             {isStreaming && messages[messages.length - 1]?.content === "" && !messages[messages.length - 1]?.thinking && (
-              <div className="flex gap-3 px-4 py-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Bot className="h-4 w-4 text-primary" />
+              <div className="flex gap-3 px-6 py-4">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <Bot className="h-3.5 w-3.5 text-primary" />
                 </div>
-                <div className="bg-muted rounded-lg px-4 py-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    思考中...
-                  </div>
+                <div className="flex items-center gap-2 rounded-2xl bg-muted px-4 py-2.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">思考中…</span>
                 </div>
               </div>
             )}
@@ -747,20 +789,20 @@ export default function ChatPage() {
       </div>
 
       {/* 输入区 */}
-      <div className="border-t p-4">
+      <div className="border-t px-4 py-3">
         <div className="mx-auto flex max-w-3xl gap-2">
           <Textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入消息... (Enter 发送，Shift+Enter 换行)"
-            className="min-h-[44px] max-h-[200px] resize-none"
+            placeholder="输入消息…"
+            className="min-h-[40px] max-h-[200px] resize-none rounded-xl text-sm"
             rows={1}
             disabled={isStreaming}
           />
           {isStreaming ? (
-            <Button variant="destructive" size="icon" onClick={handleStop}>
+            <Button variant="destructive" size="icon" onClick={handleStop} className="shrink-0 rounded-xl h-10 w-10">
               <Square className="h-4 w-4" />
             </Button>
           ) : (
@@ -768,11 +810,15 @@ export default function ChatPage() {
               size="icon"
               onClick={handleSend}
               disabled={!input.trim()}
+              className="shrink-0 rounded-xl h-10 w-10"
             >
               <Send className="h-4 w-4" />
             </Button>
           )}
         </div>
+        <p className="mt-1.5 text-center text-[11px] text-muted-foreground/50">
+          Enter 发送 · Shift+Enter 换行
+        </p>
       </div>
     </div>
   );

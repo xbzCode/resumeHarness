@@ -98,31 +98,30 @@ function SidebarContent() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Logo */}
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <FileText className="h-5 w-5 text-primary" />
-        <span className="font-semibold">Resume Agent</span>
-      </div>
+      {/* Logo - 精简 */}
+      <Link href="/" className="flex h-11 items-center gap-2 border-b px-4">
+        <FileText className="h-4 w-4 text-primary" />
+        <span className="text-sm font-semibold tracking-tight">Resume Agent</span>
+      </Link>
 
       {/* 新对话按钮 */}
-      <div className="p-3">
+      <div className="p-2">
         <Button
-          className="w-full gap-2"
+          variant="outline"
+          className="w-full gap-2 h-8 text-xs"
           onClick={() => {
             useChatStore.getState().clearMessages();
             router.replace("/chat");
           }}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
           新对话
         </Button>
       </div>
 
-      <Separator />
-
       {/* 导航 */}
-      <ScrollArea className="flex-1 px-3 py-2">
-        <nav className="space-y-1">
+      <ScrollArea className="flex-1 px-2 py-1">
+        <nav className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
@@ -131,10 +130,10 @@ function SidebarContent() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -142,8 +141,8 @@ function SidebarContent() {
               </Link>
             );
           })}
-          <div className="pt-3 pb-1 px-3">
-            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">系统配置</p>
+          <div className="pt-3 pb-1 px-2.5">
+            <p className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">系统配置</p>
           </div>
           {NAV_ADMIN_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -153,10 +152,10 @@ function SidebarContent() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -167,15 +166,15 @@ function SidebarContent() {
         </nav>
       </ScrollArea>
 
-      <Separator />
-
-      {/* 用户菜单 + 主题切换 */}
-      <div className="flex items-center gap-1 p-3">
-        <UserMenu />
-        <span className="flex-1 text-sm text-muted-foreground truncate">
-          {user?.username || ""}
-        </span>
-        <ThemeToggle className="h-8 w-8 shrink-0" />
+      {/* 底部用户区 - 精简 */}
+      <div className="border-t px-2 py-2">
+        <div className="flex items-center gap-1.5 px-2 py-1">
+          <UserMenu />
+          <span className="flex-1 text-xs text-muted-foreground truncate">
+            {user?.username || ""}
+          </span>
+          <ThemeToggle className="h-6 w-6 shrink-0" />
+        </div>
       </div>
     </div>
   );
@@ -185,7 +184,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen">
       {/* 桌面端侧边栏 */}
-      <aside className="hidden w-60 shrink-0 border-r md:block">
+      <aside className="hidden w-52 shrink-0 border-r md:block">
         <SidebarContent />
       </aside>
 
@@ -202,7 +201,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         >
           <Menu className="h-5 w-5" />
         </SheetTrigger>
-        <SheetContent side="left" className="w-60 p-0">
+        <SheetContent side="left" className="w-52 p-0">
           <SidebarContent />
         </SheetContent>
       </Sheet>
