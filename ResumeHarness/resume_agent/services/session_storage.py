@@ -92,6 +92,41 @@ def load_session_snapshot(user_id: str, session_id: str) -> dict[str, Any] | Non
         return None
 
 
+def delete_session_snapshot(user_id: str, session_id: str) -> bool:
+    """删除指定 session_id 的会话快照文件，并同步删除 SQLite 元数据。"""
+    settings = get_settings()
+    path = settings.get_user_sessions_dir(user_id) / f"session-{session_id}.json"
+    deleted = False
+    if path.exists():
+        try:
+            path.unlink()
+            deleted = True
+        except OSError:
+            pass
+
+    # 同步删除 SQLite 元数据
+    import asyncio
+
+    async def _do_delete() -> None:
+        try:
+            from resume_agent.db import get_db
+            db = await get_db()
+            await db.delete_session_meta(user_id, session_id)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "删除会话元数据失败: %s", exc
+            )
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_do_delete())
+    except RuntimeError:
+        pass
+
+    return deleted
+
+
 def list_session_snapshots(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
     """列出用户的会话快照。"""
     settings = get_settings()

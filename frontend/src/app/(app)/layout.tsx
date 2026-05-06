@@ -2,9 +2,8 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -14,6 +13,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   MessageSquare,
@@ -28,12 +35,18 @@ import {
   Layout,
   Info,
   Wrench,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useChatStore } from "@/store/chat";
+import { createAuthApi, type SessionInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AuthGuard } from "@/components/auth-guard";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { toast } from "sonner";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "对话", icon: MessageSquare },
@@ -91,6 +104,196 @@ function UserMenu() {
   );
 }
 
+/** 历史会话列表组件（侧边栏内） */
+function SessionList() {
+  const router = useRouter();
+  const token = useAuthStore((s) => s.token);
+  const sessionId = useChatStore((s) => s.sessionId);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<SessionInfo | null>(null);
+
+  useEffect(() => {
+    if (token) loadSessions();
+  }, [token]);
+
+  async function loadSessions() {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const authApi = createAuthApi(token);
+      const data = await authApi<{ sessions: SessionInfo[] }>("/api/sessions");
+      setSessions(data.sessions || []);
+    } catch {
+      // 静默失败
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLoadSession(sid: string) {
+    if (!token) return;
+    try {
+      const authApi = createAuthApi(token);
+      const data = await authApi<import("@/lib/api").SessionDetail>(`/api/sessions/${sid}`);
+      if (!data.found || !data.messages) return;
+      const converted = convertSessionMessages(data.messages);
+      useChatStore.getState().setSessionId(sid);
+      useChatStore.getState().setMessages(converted);
+      router.push(`/chat?sid=${sid}`);
+    } catch {
+      // 静默
+    }
+  }
+
+  async function handleDeleteSession() {
+    if (!token || !deleteTarget) return;
+    try {
+      const authApi = createAuthApi(token);
+      await authApi(`/api/sessions/${deleteTarget.session_id}`, { method: "DELETE" });
+      setSessions((prev) => prev.filter((s) => s.session_id !== deleteTarget.session_id));
+      // 如果删除的是当前会话，清空聊天
+      if (deleteTarget.session_id === sessionId) {
+        useChatStore.getState().clearMessages();
+        useChatStore.getState().setSessionId(null);
+        router.replace("/chat");
+      }
+      toast.success("已删除");
+    } catch {
+      toast.error("删除失败");
+    } finally {
+      setDeleteTarget(null);
+    }
+  }
+
+  function handleNewChat() {
+    useChatStore.getState().abortController?.();
+    useChatStore.getState().clearMessages();
+    router.replace("/chat");
+  }
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+      >
+        {expanded ? (
+          <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronRight className="h-3 w-3" />
+        )}
+        最近对话
+      </button>
+      {expanded && (
+        <>
+          {loading ? (
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/40" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground/40">
+              暂无历史对话
+            </p>
+          ) : (
+            <div className="max-h-[240px] overflow-y-auto px-1">
+              <div className="space-y-0.5">
+                {sessions.map((s) => (
+                  <div
+                    key={s.session_id}
+                    className={cn(
+                      "group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors cursor-pointer",
+                      s.session_id === sessionId
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                    )}
+                    onClick={() => handleLoadSession(s.session_id)}
+                  >
+                    <MessageSquare className="h-3 w-3 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12px] truncate leading-tight">
+                        {s.summary || `会话 ${s.session_id.slice(0, 8)}`}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                        {new Date(s.created_at * 1000).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {/* hover 时显示删除按钮 */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(s);
+                      }}
+                      className="shrink-0 flex h-5 w-5 items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10"
+                      title="删除对话"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 删除确认对话框 */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除对话</DialogTitle>
+            <DialogDescription>
+              确定要删除「{deleteTarget?.summary || deleteTarget?.session_id?.slice(0, 8)}」吗？删除后无法恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSession}>
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/** 从后端会话消息格式转换为前端 ChatMessage */
+function convertSessionMessages(sessionMsgs: import("@/lib/api").SessionMessage[]) {
+  const result: { id: string; role: "user" | "assistant" | "system"; content: string; thinking?: string; timestamp: number }[] = [];
+  let counter = 0;
+  for (const msg of sessionMsgs) {
+    if (msg.role !== "user" && msg.role !== "assistant") continue;
+    const textParts: string[] = [];
+    let thinking = "";
+    for (const block of msg.content) {
+      if (block.type === "text" && block.text) {
+        textParts.push(block.text);
+      }
+    }
+    const reasoning = (msg as Record<string, unknown>)._reasoning;
+    if (typeof reasoning === "string" && reasoning) {
+      thinking = reasoning;
+    }
+    const content = textParts.join("");
+    if (!content && !thinking) continue;
+    counter += 1;
+    result.push({
+      id: `msg_${counter}_${Date.now().toString(36)}`,
+      role: msg.role as "user" | "assistant",
+      content,
+      thinking: thinking || undefined,
+      timestamp: Date.now(),
+    });
+  }
+  return result;
+}
+
 function SidebarContent() {
   const pathname = usePathname();
   const router = useRouter();
@@ -98,7 +301,7 @@ function SidebarContent() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Logo - 精简 */}
+      {/* Logo */}
       <Link href="/" className="flex h-11 items-center gap-2 border-b px-4">
         <FileText className="h-4 w-4 text-primary" />
         <span className="text-sm font-semibold tracking-tight">Resume Agent</span>
@@ -110,6 +313,7 @@ function SidebarContent() {
           variant="outline"
           className="w-full gap-2 h-8 text-xs"
           onClick={() => {
+            useChatStore.getState().abortController?.();
             useChatStore.getState().clearMessages();
             router.replace("/chat");
           }}
@@ -119,7 +323,7 @@ function SidebarContent() {
         </Button>
       </div>
 
-      {/* 导航 */}
+      {/* 导航 + 历史会话 */}
       <ScrollArea className="flex-1 px-2 py-1">
         <nav className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
@@ -141,6 +345,10 @@ function SidebarContent() {
               </Link>
             );
           })}
+
+          {/* 历史会话列表 - 仅在对话页显示 */}
+          {pathname.startsWith("/chat") && <SessionList />}
+
           <div className="pt-3 pb-1 px-2.5">
             <p className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">系统配置</p>
           </div>
@@ -166,7 +374,7 @@ function SidebarContent() {
         </nav>
       </ScrollArea>
 
-      {/* 底部用户区 - 精简 */}
+      {/* 底部用户区 */}
       <div className="border-t px-2 py-2">
         <div className="flex items-center gap-1.5 px-2 py-1">
           <UserMenu />

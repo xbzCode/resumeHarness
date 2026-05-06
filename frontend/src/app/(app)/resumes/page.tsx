@@ -117,8 +117,7 @@ export default function ResumesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                            onClick={() => setDeleteId(resume.resume_id)}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           />
                         }
                       >

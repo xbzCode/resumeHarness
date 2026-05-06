@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request
 
 from resume_agent.config.settings import get_settings
 from resume_agent.memory.paths import ensure_user_dirs
-from resume_agent.services.session_storage import list_session_snapshots, load_latest_snapshot
+from resume_agent.services.session_storage import list_session_snapshots, load_latest_snapshot, delete_session_snapshot
 from resume_agent.skills.resume_skill import get_skill_info, list_skills, load_skill_content
 
 logger = logging.getLogger(__name__)
@@ -237,6 +237,17 @@ async def get_session(session_id: str, request: Request) -> dict[str, Any]:
     except Exception as exc:
         logger.error("加载会话失败: %s", exc)
         return {"session_id": session_id, "found": False, "error": str(exc)}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str, request: Request) -> dict[str, Any]:
+    """删除历史会话。"""
+    user_id = _get_user_id(request)
+    ensure_user_dirs(user_id)
+    deleted = delete_session_snapshot(user_id, session_id)
+    if deleted:
+        return {"session_id": session_id, "deleted": True}
+    return {"session_id": session_id, "deleted": False}
 
 
 # ---------------------------------------------------------------------------

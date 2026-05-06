@@ -7,13 +7,6 @@ import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
   Send,
   Square,
   FileText,
@@ -25,9 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Brain,
-  History,
   Plus,
-  MessageSquare,
   Copy,
   Check,
 } from "lucide-react";
@@ -38,7 +29,7 @@ import { streamChat, downloadFile, createAuthApi } from "@/lib/api";
 import { ResumePreview } from "@/components/resume-preview";
 import { ResumeScoreCard } from "@/components/resume-score-card";
 import { ResumeDiffView } from "@/components/resume-diff-view";
-import type { SessionInfo, SessionDetail, SessionMessage } from "@/lib/api";
+import type { SessionDetail, SessionMessage } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -446,9 +437,6 @@ export default function ChatPage() {
   } = useChatStore();
 
   const [input, setInput] = useState("");
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -467,27 +455,6 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, token]);
 
-  async function loadSessions() {
-    if (!token) return;
-    setLoadingSessions(true);
-    try {
-      const authApi = createAuthApi(token);
-      const data = await authApi<{ sessions: SessionInfo[] }>("/api/sessions");
-      setSessions(data.sessions || []);
-    } catch {
-      toast.error("加载历史会话失败");
-    } finally {
-      setLoadingSessions(false);
-    }
-  }
-
-  function handleOpenSheet(open: boolean) {
-    setSheetOpen(open);
-    if (open) {
-      loadSessions();
-    }
-  }
-
   async function loadSession(sid: string) {
     if (!token) return;
     try {
@@ -500,7 +467,6 @@ export default function ChatPage() {
       const converted = convertSessionMessages(data.messages);
       setSessionId(sid);
       setMessages(converted);
-      setSheetOpen(false);
       router.replace(`/chat?sid=${sid}`, { scroll: false });
     } catch {
       toast.error("加载会话详情失败");
@@ -641,69 +607,17 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏 - 精简 */}
+      {/* 顶栏 */}
       <div className="flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
             {sessionId ? `${sessionId.slice(0, 8)}` : "新对话"}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <Sheet open={sheetOpen} onOpenChange={handleOpenSheet}>
-            <SheetTrigger
-              render={
-                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7" />
-              }
-            >
-              <History className="h-3.5 w-3.5" />
-              历史
-            </SheetTrigger>
-            <SheetContent side="left" className="w-80 p-0">
-              <SheetHeader className="border-b px-4 py-3">
-                <SheetTitle className="text-sm">历史会话</SheetTitle>
-              </SheetHeader>
-              <div className="overflow-y-auto p-2" style={{ height: "calc(100% - 52px)" }}>
-                {loadingSessions ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : sessions.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    暂无历史会话
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">
-                    {sessions.map((s) => (
-                      <button
-                        key={s.session_id}
-                        type="button"
-                        onClick={() => loadSession(s.session_id)}
-                        className={cn(
-                          "flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
-                          s.session_id === sessionId && "bg-accent",
-                        )}
-                      >
-                        <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">
-                            {s.summary || `会话 ${s.session_id.slice(0, 8)}`}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
-                            {s.message_count} 条消息 · {new Date(s.created_at * 1000).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
-          <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1 text-xs h-7">
-            <Plus className="h-3.5 w-3.5" />
-            新对话
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1 text-xs h-7">
+          <Plus className="h-3.5 w-3.5" />
+          新对话
+        </Button>
       </div>
 
       {/* 消息列表 */}
