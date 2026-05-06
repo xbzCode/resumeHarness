@@ -1,26 +1,48 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FileText, Sparkles, Zap, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuthStore } from "@/store/auth";
 
 export default function HomePage() {
+  const router = useRouter();
+  const { token } = useAuthStore();
+  const [hydrated, setHydrated] = useState(false);
+
+  // 等待客户端 hydration 完成（persist store 从 localStorage 恢复）
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <FileText className="h-6 w-6 text-primary" />
             <span className="text-lg font-semibold">Resume Agent</span>
-          </div>
+          </Link>
           <nav className="flex items-center gap-2">
             <ThemeToggle className="h-8 w-8" />
-            <Link href="/login">
-              <Button variant="ghost" size="sm">登录</Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm">注册</Button>
-            </Link>
+            {hydrated && token ? (
+              <Button size="sm" onClick={() => router.push("/chat")}>
+                进入工作台
+              </Button>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" size="sm">登录</Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm">注册</Button>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -38,17 +60,26 @@ export default function HomePage() {
               支持多模板、PDF 导出、对话式交互。
             </p>
             <div className="mt-10 flex items-center justify-center gap-4">
-              <Link href="/register">
-                <Button size="lg" className="gap-2">
+              {hydrated && token ? (
+                <Button size="lg" className="gap-2" onClick={() => router.push("/chat")}>
                   <Sparkles className="h-4 w-4" />
-                  免费开始
+                  进入工作台
                 </Button>
-              </Link>
-              <Link href="/login">
-                <Button variant="outline" size="lg">
-                  已有账号，登录
-                </Button>
-              </Link>
+              ) : (
+                <>
+                  <Link href="/register">
+                    <Button size="lg" className="gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      免费开始
+                    </Button>
+                  </Link>
+                  <Link href="/login">
+                    <Button variant="outline" size="lg">
+                      已有账号，登录
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </section>

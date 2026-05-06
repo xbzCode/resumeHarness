@@ -1,4 +1,5 @@
 import { ofetch } from "ofetch";
+import { useAuthStore } from "@/store/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -11,7 +12,7 @@ export const api = ofetch.create({
   },
 });
 
-/** 带认证的请求实例 */
+/** 带认证的请求实例，401 时直接清除认证并跳转登录页 */
 export function createAuthApi(token: string) {
   return ofetch.create({
     baseURL: API_BASE,
@@ -19,25 +20,58 @@ export function createAuthApi(token: string) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
+    async onResponseError({ response }) {
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          useAuthStore.getState().clearAuth();
+          window.location.href = "/login";
+        }
+      }
+    },
   });
+}
+
+/** 带认证的 fetch 请求，401 时直接清除认证并跳转登录页 */
+async function authFetch(token: string, path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (res.status === 401) {
+    if (typeof window !== "undefined") {
+      useAuthStore.getState().clearAuth();
+      window.location.href = "/login";
+    }
+  }
+
+  return res;
 }
 
 /** 下载文件（返回 Blob） */
 export async function downloadFile(token: string, path: string): Promise<Blob> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(token, path);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.blob();
 }
 
 /** 获取文本响应 */
 export async function fetchText(token: string, path: string): Promise<string> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(token, path);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
+}
+
+/** 获取 JSON 响应 */
+export async function fetchJson<T = unknown>(token: string, path: string): Promise<T> {
+  const res = await authFetch(token, path, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 // ---- 类型定义 ----
@@ -132,6 +166,11 @@ export async function streamChat(
   })
     .then(async (response) => {
       if (!response.ok) {
+        if (response.status === 401) {
+          useAuthStore.getState().clearAuth();
+          window.location.href = "/login";
+          return;
+        }
         const text = await response.text();
         throw new Error(`HTTP ${response.status}: ${text}`);
       }
