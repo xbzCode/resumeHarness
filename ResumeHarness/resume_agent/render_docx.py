@@ -10,6 +10,13 @@ import io
 import logging
 from typing import TYPE_CHECKING
 
+try:
+    from docx import Document
+    from docx.shared import Pt, Inches, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+except ImportError:
+    Document = None  # type: ignore[assignment,misc]
+
 if TYPE_CHECKING:
     from resume_agent.models.resume_data import ResumeData
 
@@ -26,12 +33,8 @@ def render_resume_data_to_docx(data: ResumeData, template: str = "professional")
     Returns:
         DOCX 文件字节数据
     """
-    try:
-        from docx import Document
-        from docx.shared import Pt, Inches, Cm, RGBColor
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-    except ImportError as exc:
-        raise ImportError("python-docx 未安装，请执行: pip install python-docx") from exc
+    if Document is None:
+        raise ImportError("python-docx 未安装，请执行: pip install python-docx")
 
     doc = Document()
 
