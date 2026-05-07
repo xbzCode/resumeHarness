@@ -1,0 +1,9 @@
+/* 优雅风 - elegant.css */
+@page { size: A4; margin: 2cm; }
+body { font-size: 10pt; line-height: 1.5; color: #333; max-width: 210mm; }
+h1 { font-size: 20pt; font-weight: bold; color: #1a2332; border-bottom: 2px solid #b8860b; padding-bottom: 6px; margin-bottom: 12px; }
+h2 { font-size: 14pt; color: #1a2332; border-bottom: 1px solid #d4a574; padding-bottom: 4px; margin-top: 16px; margin-bottom: 8px; }
+h3 { font-size: 11pt; color: #1a2332; }
+p { font-size: 9.5pt; color: #555; }
+ul { padding-left: 16px; }
+li { font-size: 9pt; color: #444; margin-bottom: 2px; }

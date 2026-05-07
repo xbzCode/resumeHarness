@@ -81,6 +81,10 @@ class ResumeData(BaseModel):
     projects: list[ProjectExperience] = Field(
         default_factory=list, description="项目经历（按时间倒序）"
     )
+    section_order: list[str] | None = Field(
+        default=None,
+        description="章节显示顺序，如 ['summary', 'experience', 'education', 'skills', 'projects']",
+    )
 
     def has_content(self) -> bool:
         """检查简历是否有实质内容（至少有姓名和一个章节）。"""

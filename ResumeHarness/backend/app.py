@@ -142,13 +142,13 @@ def create_app() -> FastAPI:
     # 监控中间件（最外层，记录所有请求）
     if settings.monitor_enabled:
         app.add_middleware(MonitoringMiddleware, log_interval=settings.monitor_log_interval)
-        _monitoring_middleware = MonitoringMiddleware(app, log_interval=settings.monitor_log_interval)
+        _monitoring_middleware = _find_middleware(app, MonitoringMiddleware)
         logger.info("监控中间件已启用 (interval=%ds)", settings.monitor_log_interval)
 
     # 速率限制中间件（在认证之后，可读取 user_id）
     if settings.rate_limit_enabled:
         app.add_middleware(RateLimitMiddleware, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
-        _rate_limit_middleware = RateLimitMiddleware(app, rpm=settings.rate_limit_rpm, max_wait=settings.rate_limit_max_wait)
+        _rate_limit_middleware = _find_middleware(app, RateLimitMiddleware)
         logger.info("速率限制中间件已启用 (rpm=%d)", settings.rate_limit_rpm)
 
     # JWT 认证中间件（在 CORS 之后，CORS preflight 不受影响）
@@ -170,6 +170,18 @@ def create_app() -> FastAPI:
     # 不再挂载 StaticFiles
 
     return app
+
+
+def _find_middleware(app: FastAPI, cls: type) -> Any:
+    """从 FastAPI 中间件栈中查找指定类型的中间件实例。"""
+    # 遍历 Starlette 内部中间件链
+    layer = getattr(app, "middleware_stack", None) or getattr(app, "_middleware_stack", None)
+    while layer is not None:
+        if isinstance(layer, cls):
+            return layer
+        # 纯 ASGI 中间件包装在 MiddlewareWrapper 中，其 .app 属性指向下一层
+        layer = getattr(layer, "app", None)
+    return None
 
 
 app = create_app()

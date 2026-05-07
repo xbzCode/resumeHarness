@@ -1,0 +1,14 @@
+{
+  "name": "tech",
+  "version": "1.0.0",
+  "display_name": "科技",
+  "description": "深色终端风格侧边栏，代码风格标签，适合程序员/工程师",
+  "author": "ResumeHarness",
+  "layout": "two-column",
+  "color_scheme": {
+    "primary": "#111827",
+    "accent": "#10b981"
+  },
+  "recommended_industries": ["tech", "engineer"],
+  "has_html": true
+}

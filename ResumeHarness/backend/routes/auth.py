@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 
 from backend.middleware.auth import (
     create_jwt,
-    hash_password,
+    hash_password_async,
     verify_jwt,
-    verify_password,
+    verify_password_async,
 )
 from resume_agent.config.settings import get_settings
 from resume_agent.db import get_db
@@ -101,7 +101,7 @@ async def register(body: RegisterRequest) -> Any:
         raise HTTPException(status_code=409, detail="用户名已存在")
 
     # 密码哈希
-    password_hash = hash_password(body.password)
+    password_hash = await hash_password_async(body.password)
 
     # 创建用户
     try:
@@ -146,7 +146,7 @@ async def login(body: LoginRequest) -> Any:
     if user is None:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-    if not verify_password(body.password, user["password_hash"]):
+    if not await verify_password_async(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
     # 确保 user_id 对应的用户目录存在
@@ -243,10 +243,10 @@ async def change_password(body: ChangePasswordRequest, request: Request) -> dict
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    if not verify_password(body.old_password, user["password_hash"]):
+    if not await verify_password_async(body.old_password, user["password_hash"]):
         raise HTTPException(status_code=400, detail="当前密码错误")
 
-    new_hash = hash_password(body.new_password)
+    new_hash = await hash_password_async(body.new_password)
     await db.update_user_password(user_id, new_hash)
 
     logger.info("用户修改密码: user_id=%s", user_id)

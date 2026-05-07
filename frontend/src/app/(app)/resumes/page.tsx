@@ -110,7 +110,7 @@ export default function ResumesPage() {
                     <FileText className="h-8 w-8 text-primary" />
                     <Dialog
                       open={deleteId === resume.resume_id}
-                      onOpenChange={(open) => !open && setDeleteId(null)}
+                      onOpenChange={(open) => setDeleteId(open ? resume.resume_id : null)}
                     >
                       <DialogTrigger
                         render={

@@ -1,0 +1,14 @@
+{
+  "name": "elegant",
+  "version": "1.0.0",
+  "display_name": "优雅",
+  "description": "深蓝金色系，经典排版，适合高端岗位/金融/咨询行业",
+  "author": "ResumeHarness",
+  "layout": "two-column",
+  "color_scheme": {
+    "primary": "#1a2332",
+    "accent": "#b8860b"
+  },
+  "recommended_industries": ["finance", "banking", "consulting"],
+  "has_html": true
+}

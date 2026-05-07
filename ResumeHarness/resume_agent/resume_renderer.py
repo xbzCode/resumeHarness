@@ -12,7 +12,7 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from resume_agent.config.settings import get_settings
 from resume_agent.exceptions import ResumeRenderError
@@ -20,7 +20,7 @@ from resume_agent.exceptions import ResumeRenderError
 log = logging.getLogger(__name__)
 
 # 可用模板列表
-AVAILABLE_TEMPLATES = ["professional", "academic", "creative"]
+AVAILABLE_TEMPLATES = ["professional", "academic", "creative", "minimal", "elegant", "tech", "compact"]
 
 
 def get_available_templates() -> list[str]:
@@ -33,8 +33,8 @@ def get_available_templates() -> list[str]:
 INDUSTRY_TEMPLATE_MAP: dict[str, str] = {
     "tech": "professional",       # 互联网/科技 → 商务双栏
     "internet": "professional",   # 互联网 → 商务双栏
-    "finance": "academic",        # 金融 → 学术单栏
-    "banking": "academic",        # 银行 → 学术单栏
+    "finance": "elegant",         # 金融 → 优雅
+    "banking": "elegant",         # 银行 → 优雅
     "education": "academic",      # 教育 → 学术单栏
     "academic": "academic",       # 学术 → 学术单栏
     "design": "creative",         # 设计 → 创意卡片
@@ -43,8 +43,11 @@ INDUSTRY_TEMPLATE_MAP: dict[str, str] = {
     "healthcare": "academic",     # 医疗 → 学术单栏
     "government": "academic",     # 政府/公共事业 → 学术单栏
     "manufacturing": "professional",  # 制造业 → 商务双栏
-    "consulting": "professional",     # 咨询 → 商务双栏
+    "consulting": "elegant",      # 咨询 → 优雅
     "legal": "academic",          # 法律 → 学术单栏
+    "startup": "minimal",         # 初创 → 极简
+    "foreign": "minimal",         # 外企 → 极简
+    "engineer": "tech",           # 工程师 → 科技
 }
 
 # 岗位关键词→行业映射
@@ -176,9 +179,28 @@ def _parse_resume_data(markdown_content: str) -> Any:
 
 
 def _render_html_from_resume_data(resume_data: Any, template: str) -> str:
-    """使用 Jinja2 模板渲染 ResumeData 为 HTML。"""
+    """使用 Jinja2 模板渲染 ResumeData 为 HTML（带页面居中样式）。"""
+    return render_resume_data_to_html_with_center(resume_data, template)
+
+
+def render_resume_data_to_html_with_center(resume_data: Any, template: str) -> str:
+    """使用 Jinja2 模板渲染 ResumeData 为 HTML，并添加页面居中样式。
+
+    用于 HTML 预览/分享端点，PDF 渲染不使用此函数。
+    """
     from resume_agent.render_pdf_engine import render_resume_data_to_html
-    return render_resume_data_to_html(resume_data, template)
+    html = render_resume_data_to_html(resume_data, template)
+    # 在 </style> 前注入居中样式（仅 HTML 预览/分享，不影响 PDF 渲染）
+    center_css = """
+body {
+    display: flex;
+    justify-content: center;
+    background: #f5f5f5;
+    padding: 20px 0;
+}
+"""
+    html = html.replace("</style>", center_css + "\n</style>", 1)
+    return html
 
 
 def _render_html_from_markdown(markdown_content: str, template: str) -> str:
@@ -204,6 +226,12 @@ def _render_html_from_markdown(markdown_content: str, template: str) -> str:
 <style>
 {font_css}
 {css_content}
+body {{
+    display: flex;
+    justify-content: center;
+    background: #f5f5f5;
+    padding: 20px 0;
+}}
 </style>
 </head>
 <body>
@@ -395,6 +423,185 @@ def load_resume_snapshot(user_id: str, resume_id: str) -> str | None:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
+
+
+def save_resume_data(user_id: str, resume_id: str, data: dict[str, Any]) -> bool:
+    """保存用户编辑后的 ResumeData JSON 到磁盘。
+
+    同时重新生成 Markdown 原文，保持双格式一致。
+
+    Args:
+        user_id: 用户 ID
+        resume_id: 简历 ID
+        data: ResumeData 字典
+
+    Returns:
+        是否保存成功
+    """
+    settings = get_settings()
+    resumes_dir = settings.get_user_resumes_dir(user_id)
+
+    json_path = resumes_dir / f"{resume_id}.json"
+    md_path = resumes_dir / f"{resume_id}.md"
+
+    # 校验简历存在
+    if not json_path.exists() and not md_path.exists():
+        log.warning("简历不存在，无法保存: user=%s resume_id=%s", user_id, resume_id)
+        return False
+
+    # 校验 ResumeData 格式
+    try:
+        from resume_agent.models.resume_data import ResumeData
+
+        resume_data = ResumeData.model_validate(data)
+    except Exception as exc:
+        log.error("ResumeData 校验失败: %s", exc)
+        return False
+
+    # 保存 JSON
+    json_content = resume_data.model_dump_json(indent=2)
+    json_path.write_text(json_content, encoding="utf-8")
+
+    # 重新生成 Markdown 并保存
+    md_content = _resume_data_to_markdown(resume_data)
+    md_path.write_text(md_content, encoding="utf-8")
+
+    log.info("保存用户编辑的简历数据: user=%s resume_id=%s", user_id, resume_id)
+    return True
+
+
+def _resume_data_to_markdown(data: "ResumeData") -> str:
+    """将 ResumeData 转换为 Markdown 格式。
+
+    用于前端编辑后重新生成 Markdown，保持双格式一致。
+    支持 section_order 自定义章节顺序。
+    """
+    lines: list[str] = []
+
+    # 姓名
+    if data.name:
+        lines.append(f"# {data.name}")
+        lines.append("")
+
+    # 联系方式
+    contact_parts: list[str] = []
+    if data.contact.email:
+        contact_parts.append(data.contact.email)
+    if data.contact.phone:
+        contact_parts.append(data.contact.phone)
+    if data.contact.location:
+        contact_parts.append(data.contact.location)
+    if data.contact.website:
+        contact_parts.append(data.contact.website)
+    if data.contact.linkedin:
+        contact_parts.append(data.contact.linkedin)
+    if data.contact.wechat:
+        contact_parts.append(f"微信: {data.contact.wechat}")
+    if data.contact.raw_text and not contact_parts:
+        contact_parts.append(data.contact.raw_text)
+    if contact_parts:
+        lines.append(" | ".join(contact_parts))
+        lines.append("")
+
+    # 按 section_order 顺序渲染各章节
+    default_order = ["summary", "experience", "education", "skills", "projects"]
+    section_order = data.section_order if data.section_order else default_order
+
+    # 构建各章节内容
+    section_builders: dict[str, Callable[[], list[str]]] = {
+        "summary": _build_summary_section,
+        "experience": _build_experience_section,
+        "education": _build_education_section,
+        "skills": _build_skills_section,
+        "projects": _build_projects_section,
+    }
+
+    rendered_keys: set[str] = set()
+    for key in section_order:
+        if key in rendered_keys:
+            continue
+        if key in section_builders:
+            section_lines = section_builders[key](data)
+            if section_lines:
+                lines.extend(section_lines)
+            rendered_keys.add(key)
+
+    # 渲染 section_order 中未包含但有内容的章节
+    for key in default_order:
+        if key not in rendered_keys and key in section_builders:
+            section_lines = section_builders[key](data)
+            if section_lines:
+                lines.extend(section_lines)
+
+    return "\n".join(lines)
+
+
+def _build_summary_section(data: "ResumeData") -> list[str]:
+    """构建个人简介章节。"""
+    if not data.summary:
+        return []
+    return ["## 个人简介", "", data.summary, ""]
+
+
+def _build_experience_section(data: "ResumeData") -> list[str]:
+    """构建工作经历章节。"""
+    if not data.experience:
+        return []
+    lines = ["## 工作经历", ""]
+    for exp in data.experience:
+        lines.append(f"### {exp.title} - {exp.company}（{exp.period}）")
+        lines.append("")
+        for h in exp.highlights:
+            lines.append(f"- {h}")
+        lines.append("")
+    return lines
+
+
+def _build_education_section(data: "ResumeData") -> list[str]:
+    """构建教育背景章节。"""
+    if not data.education:
+        return []
+    lines = ["## 教育背景", ""]
+    for edu in data.education:
+        lines.append(f"### {edu.degree} - {edu.major} - {edu.school}（{edu.period}）")
+        lines.append("")
+        for a in edu.achievements:
+            lines.append(f"- {a}")
+        if edu.achievements:
+            lines.append("")
+    return lines
+
+
+def _build_skills_section(data: "ResumeData") -> list[str]:
+    """构建专业技能章节。"""
+    if not data.skills:
+        return []
+    lines = ["## 专业技能", ""]
+    for cat in data.skills:
+        lines.append(f"- **{cat.category}**：{'、'.join(cat.skills)}")
+    lines.append("")
+    return lines
+
+
+def _build_projects_section(data: "ResumeData") -> list[str]:
+    """构建项目经历章节。"""
+    if not data.projects:
+        return []
+    lines = ["## 项目经历", ""]
+    for proj in data.projects:
+        header = f"### {proj.name}"
+        if proj.role:
+            header += f" - {proj.role}"
+        if proj.period:
+            header += f"（{proj.period}）"
+        lines.append(header)
+        lines.append("")
+        if proj.description:
+            lines.append(f"- **项目描述**：{proj.description}")
+        for c in proj.contributions:
+            lines.append(f"- {c}")
+        lines.append("")
+    return lines
 
 
 def load_resume_data(user_id: str, resume_id: str) -> dict[str, Any] | None:

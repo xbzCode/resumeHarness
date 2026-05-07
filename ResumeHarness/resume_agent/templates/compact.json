@@ -1,0 +1,14 @@
+{
+  "name": "compact",
+  "version": "1.0.0",
+  "display_name": "紧凑",
+  "description": "信息密度高，减少留白，适合经历丰富的资深岗位",
+  "author": "ResumeHarness",
+  "layout": "single-column",
+  "color_scheme": {
+    "primary": "#1f2937",
+    "accent": "#6b7280"
+  },
+  "recommended_industries": [],
+  "has_html": true
+}

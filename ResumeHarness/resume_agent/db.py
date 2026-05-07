@@ -111,6 +111,18 @@ class ResumeAgentDB:
             )
         """)
 
+        # 简历分享链接表
+        await self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS share_links (
+                share_id    TEXT PRIMARY KEY,
+                resume_id   TEXT NOT NULL,
+                user_id     TEXT NOT NULL,
+                template    TEXT DEFAULT 'professional',
+                created_at  REAL NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
         # 索引
         await self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_session_meta_user "
@@ -123,6 +135,14 @@ class ResumeAgentDB:
         await self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_channel_bindings_lookup "
             "ON channel_bindings(channel, sender_id)"
+        )
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_share_links_resume "
+            "ON share_links(resume_id)"
+        )
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_share_links_user "
+            "ON share_links(user_id, created_at DESC)"
         )
 
         await self.conn.commit()
@@ -328,6 +348,71 @@ class ResumeAgentDB:
         )
         await self.conn.commit()
         return cur.rowcount
+
+    # -----------------------------------------------------------------------
+    # 分享链接
+    # -----------------------------------------------------------------------
+
+    async def create_share_link(
+        self,
+        *,
+        resume_id: str,
+        user_id: str,
+        template: str = "professional",
+    ) -> str:
+        """创建简历分享链接，返回 share_id（UUID）。
+        
+        如果该简历已有分享链接，则重新生成（旧的作废）。
+        """
+        # 删除旧的分享链接
+        await self.conn.execute(
+            "DELETE FROM share_links WHERE resume_id = ? AND user_id = ?",
+            (resume_id, user_id),
+        )
+
+        share_id = str(uuid.uuid4())
+        now = time.time()
+        await self.conn.execute(
+            "INSERT INTO share_links (share_id, resume_id, user_id, template, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (share_id, resume_id, user_id, template, now),
+        )
+        await self.conn.commit()
+        log.info("创建分享链接: share_id=%s resume_id=%s user=%s", share_id, resume_id, user_id)
+        return share_id
+
+    async def get_share_link(self, share_id: str) -> dict[str, Any] | None:
+        """通过 share_id 查找分享链接。"""
+        cur = await self.conn.execute(
+            "SELECT share_id, resume_id, user_id, template, created_at "
+            "FROM share_links WHERE share_id = ?",
+            (share_id,),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def get_share_link_by_resume(self, user_id: str, resume_id: str) -> dict[str, Any] | None:
+        """获取用户某份简历的分享链接。"""
+        cur = await self.conn.execute(
+            "SELECT share_id, resume_id, user_id, template, created_at "
+            "FROM share_links WHERE user_id = ? AND resume_id = ?",
+            (user_id, resume_id),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def delete_share_link(self, share_id: str) -> bool:
+        """删除分享链接。"""
+        cur = await self.conn.execute(
+            "DELETE FROM share_links WHERE share_id = ?",
+            (share_id,),
+        )
+        await self.conn.commit()
+        return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------

@@ -63,6 +63,7 @@ export interface ResumeData {
     description?: string;
     contributions: string[];
   }[];
+  section_order?: string[];
 }
 
 /** 简历评分数据（与后端 ResumeScoreResult 对应） */

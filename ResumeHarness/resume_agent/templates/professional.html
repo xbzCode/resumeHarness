@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <style>
-/* ===== 简洁商务风 - 双栏侧边栏布局 ===== */
+/* ===== 简洁商务风 - 双栏侧边栏布局（与前端 resume-pdf.tsx 保持一致） ===== */
 @page {
     size: A4;
     margin: 0;
@@ -16,25 +16,41 @@
 }
 
 body {
-    font-family: "SimHei", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
-    font-size: 10pt;
+   font-size: 10pt;
     line-height: 1.5;
-    color: #333;
-    background: #fff;
+    color: #1f2937;
+    background: #f3f4f6;
+    display: flex;
+    justify-content: center;
 }
 
-.page {
+/* A4 纸容器 - 居中 + 限宽 */
+.resume-page {
     width: 210mm;
     min-height: 297mm;
-    display: flex;
+    background: #fff;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+/* 外层 table 实现双栏布局 */
+.layout-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: none;
+}
+
+.layout-table td {
+    vertical-align: top;
+    padding: 0;
 }
 
 /* ===== 侧边栏 ===== */
-.sidebar {
-    width: 72mm;
-    background: #2c3e50;
-    color: #ecf0f1;
-    padding: 24px 18px;
+td.sidebar {
+    width: 38%;
+    background: #1e293b;
+    color: #f3f4f6;
+    padding: 1.25rem;
 }
 
 .sidebar .name {
@@ -47,14 +63,18 @@ body {
 
 .sidebar .contact-item {
     font-size: 8.5pt;
-    margin-bottom: 3px;
-    color: #bdc3c7;
-    word-break: break-all;
+    margin-bottom: 2px;
+    color: #9ca3af;
 }
 
-.sidebar .contact-item a {
-    color: #bdc3c7;
-    text-decoration: none;
+.sidebar .contact-icon {
+    color: #9ca3af;
+    font-size: 8.5pt;
+    margin-right: 4px;
+}
+
+.sidebar .contact-list {
+    margin-top: 8px;
 }
 
 .sidebar-section {
@@ -64,12 +84,12 @@ body {
 .sidebar-section-title {
     font-size: 10pt;
     font-weight: bold;
-    color: #3498db;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    color: #60a5fa;
+    letter-spacing: 0.05em;
     padding-bottom: 4px;
-    border-bottom: 1px solid #34495e;
+    border-bottom: 1px solid #475569;
     margin-bottom: 8px;
+    text-transform: uppercase;
 }
 
 .skill-category {
@@ -79,20 +99,20 @@ body {
 .skill-category-name {
     font-size: 9pt;
     font-weight: bold;
-    color: #ecf0f1;
-    margin-bottom: 2px;
+    color: #e5e7eb;
+    margin-bottom: 1px;
 }
 
 .skill-category-items {
     font-size: 8.5pt;
-    color: #bdc3c7;
-    line-height: 1.4;
+    color: #9ca3af;
+    line-height: 1.5;
 }
 
 /* ===== 主内容区 ===== */
-.main {
-    flex: 1;
-    padding: 24px 24px 24px 22px;
+td.main {
+    width: 62%;
+    padding: 1.25rem;
 }
 
 .main-section {
@@ -102,18 +122,18 @@ body {
 .main-section-title {
     font-size: 12pt;
     font-weight: bold;
-    color: #2c3e50;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    color: #1e293b;
+    letter-spacing: 0.05em;
     padding-bottom: 4px;
-    border-bottom: 2px solid #3498db;
-    margin-bottom: 10px;
+    border-bottom: 2px solid #3b82f6;
+    margin-bottom: 8px;
+    text-transform: uppercase;
 }
 
 .summary-text {
     font-size: 9.5pt;
-    color: #555;
-    line-height: 1.6;
+    color: #4b5563;
+    line-height: 1.625;
 }
 
 /* 工作经历条目 */
@@ -121,49 +141,62 @@ body {
     margin-bottom: 12px;
 }
 
-.exp-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 3px;
+.exp-header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: none;
+}
+
+.exp-header-table td {
+    padding: 0;
+    vertical-align: baseline;
+}
+
+.exp-header-left {
+    text-align: left;
+}
+
+.exp-header-right {
+    text-align: right;
 }
 
 .exp-title {
     font-size: 10.5pt;
     font-weight: bold;
-    color: #2c3e50;
+    color: #1e293b;
 }
 
 .exp-company {
     font-size: 9.5pt;
-    color: #555;
+    color: #4b5563;
 }
 
 .exp-period {
     font-size: 8.5pt;
-    color: #888;
-    white-space: nowrap;
+    color: #64748b;
 }
 
 .exp-highlights {
     list-style: none;
     padding-left: 0;
+    margin-top: 4px;
 }
 
 .exp-highlights li {
     font-size: 9pt;
-    color: #444;
-    padding-left: 12px;
-    position: relative;
+    color: #4b5563;
     margin-bottom: 2px;
     line-height: 1.5;
+    position: relative;
+    padding-left: 14px;
 }
 
-.exp-highlights li::before {
-    content: "▸";
+.exp-highlights li:before {
+    content: "\25B8";
+    color: #3b82f6;
     position: absolute;
     left: 0;
-    color: #3498db;
+    top: 0;
 }
 
 /* 教育背景条目 */
@@ -171,108 +204,148 @@ body {
     margin-bottom: 8px;
 }
 
-.edu-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 2px;
+.edu-header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: none;
+}
+
+.edu-header-table td {
+    padding: 0;
+    vertical-align: baseline;
+}
+
+.edu-header-left {
+    text-align: left;
+}
+
+.edu-header-right {
+    text-align: right;
 }
 
 .edu-school {
     font-size: 10pt;
     font-weight: bold;
-    color: #2c3e50;
+    color: #1e293b;
 }
 
 .edu-degree {
     font-size: 9pt;
-    color: #555;
+    color: #4b5563;
 }
 
 .edu-period {
     font-size: 8.5pt;
-    color: #888;
-    white-space: nowrap;
+    color: #64748b;
 }
 
 .edu-achievements {
     list-style: none;
     padding-left: 0;
+    margin-top: 2px;
 }
 
 .edu-achievements li {
     font-size: 8.5pt;
-    color: #555;
-    padding-left: 12px;
-    position: relative;
+    color: #6b7280;
     margin-bottom: 1px;
+    line-height: 1.5;
+    position: relative;
+    padding-left: 14px;
 }
 
-.edu-achievements li::before {
-    content: "•";
+.edu-achievements li:before {
+    content: "\2022";
+    color: #3b82f6;
     position: absolute;
     left: 0;
-    color: #3498db;
+    top: 0;
 }
 
 /* 项目经历条目 */
 .proj-item {
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
-.proj-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 3px;
+.proj-header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: none;
+}
+
+.proj-header-table td {
+    padding: 0;
+    vertical-align: baseline;
+}
+
+.proj-header-left {
+    text-align: left;
+}
+
+.proj-header-right {
+    text-align: right;
 }
 
 .proj-name {
     font-size: 10pt;
     font-weight: bold;
-    color: #2c3e50;
+    color: #1e293b;
 }
 
 .proj-role {
+    font-size: 9pt;
+    color: #9ca3af;
+}
+
+.proj-period {
     font-size: 8.5pt;
-    color: #888;
+    color: #64748b;
 }
 
 .proj-desc {
     font-size: 8.5pt;
-    color: #666;
+    color: #6b7280;
+    font-style: italic;
     margin-bottom: 2px;
+    margin-top: 2px;
 }
 
 .proj-contributions {
     list-style: none;
     padding-left: 0;
+    margin-top: 4px;
 }
 
 .proj-contributions li {
     font-size: 9pt;
-    color: #444;
-    padding-left: 12px;
-    position: relative;
+    color: #4b5563;
     margin-bottom: 2px;
     line-height: 1.5;
+    position: relative;
+    padding-left: 14px;
 }
 
-.proj-contributions li::before {
-    content: "▸";
+.proj-contributions li:before {
+    content: "\25B8";
+    color: #3b82f6;
     position: absolute;
     left: 0;
-    color: #3498db;
+    top: 0;
 }
 
 /* ===== 打印优化 ===== */
 @media print {
     body {
+        background: #fff;
+        display: block;
+    }
+    .resume-page {
+        box-shadow: none;
+        width: 100%;
+    }
+    body {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-    }
-    .page {
-        min-height: auto;
     }
     .exp-item, .edu-item, .proj-item {
         page-break-inside: avoid;
@@ -284,31 +357,36 @@ body {
 </style>
 </head>
 <body>
-<div class="page">
+<div class="resume-page">
+<table class="layout-table"><tr>
     <!-- 侧边栏 -->
-    <div class="sidebar">
+    <td class="sidebar">
         <div class="name">{{ resume.name }}</div>
 
+        {% if resume.contact.email or resume.contact.phone or resume.contact.location or resume.contact.website or resume.contact.linkedin or resume.contact.wechat or resume.contact.raw_text %}
+        <div class="contact-list">
         {% if resume.contact.email %}
-        <div class="contact-item">✉ {{ resume.contact.email }}</div>
+        <div class="contact-item"><span class="contact-icon">&#x2709;</span> {{ resume.contact.email }}</div>
         {% endif %}
         {% if resume.contact.phone %}
-        <div class="contact-item">☎ {{ resume.contact.phone }}</div>
+        <div class="contact-item"><span class="contact-icon">&#x260E;</span> {{ resume.contact.phone }}</div>
         {% endif %}
         {% if resume.contact.location %}
-        <div class="contact-item">📍 {{ resume.contact.location }}</div>
+        <div class="contact-item"><span class="contact-icon">&#x1F4CD;</span> {{ resume.contact.location }}</div>
         {% endif %}
         {% if resume.contact.website %}
-        <div class="contact-item">🌐 {{ resume.contact.website }}</div>
+        <div class="contact-item"><span class="contact-icon">&#x1F310;</span> {{ resume.contact.website }}</div>
         {% endif %}
         {% if resume.contact.linkedin %}
-        <div class="contact-item">LinkedIn: {{ resume.contact.linkedin }}</div>
+        <div class="contact-item"><span class="contact-icon">in</span> {{ resume.contact.linkedin }}</div>
         {% endif %}
         {% if resume.contact.wechat %}
-        <div class="contact-item">微信: {{ resume.contact.wechat }}</div>
+        <div class="contact-item"><span class="contact-icon">&#x5FAE;</span> {{ resume.contact.wechat }}</div>
         {% endif %}
         {% if not resume.contact.email and not resume.contact.phone and not resume.contact.location and resume.contact.raw_text %}
         <div class="contact-item">{{ resume.contact.raw_text }}</div>
+        {% endif %}
+        </div>
         {% endif %}
 
         {% if resume.skills %}
@@ -322,29 +400,144 @@ body {
             {% endfor %}
         </div>
         {% endif %}
-    </div>
+    </td>
 
-    <!-- 主内容区 -->
-    <div class="main">
-        {% if resume.summary %}
+    <!-- 主内容区 - 按 section_order 动态渲染 -->
+    <td class="main">
+        {% set section_order = resume.section_order or ['summary', 'experience', 'education', 'projects'] %}
+        {% set rendered_keys = [] %}
+
+        {% for key in section_order %}
+            {% if key == 'summary' and key not in rendered_keys %}
+                {% if rendered_keys.append('summary') %}{% endif %}
+                {% if resume.summary %}
+                <div class="main-section">
+                    <div class="main-section-title">个人简介</div>
+                    <div class="summary-text">{{ resume.summary }}</div>
+                </div>
+                {% endif %}
+
+            {% elif key == 'experience' and key not in rendered_keys %}
+                {% if rendered_keys.append('experience') %}{% endif %}
+                {% if resume.experience %}
+                <div class="main-section">
+                    <div class="main-section-title">工作经历</div>
+                    {% for exp in resume.experience %}
+                    <div class="exp-item">
+                        <table class="exp-header-table"><tr>
+                            <td class="exp-header-left">
+                                <span class="exp-title">{{ exp.title }}</span>
+                                {% if exp.company %}<span class="exp-company"> &#8212; {{ exp.company }}</span>{% endif %}
+                            </td>
+                            <td class="exp-header-right">
+                                {% if exp.period %}<span class="exp-period">{{ exp.period }}</span>{% endif %}
+                            </td>
+                        </tr></table>
+                        {% if exp.highlights %}
+                        <ul class="exp-highlights">
+                            {% for h in exp.highlights %}
+                            <li>{{ h }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            {% elif key == 'education' and key not in rendered_keys %}
+                {% if rendered_keys.append('education') %}{% endif %}
+                {% if resume.education %}
+                <div class="main-section">
+                    <div class="main-section-title">教育背景</div>
+                    {% for edu in resume.education %}
+                    <div class="edu-item">
+                        <table class="edu-header-table"><tr>
+                            <td class="edu-header-left">
+                                <span class="edu-school">{{ edu.school }}</span>
+                                {% if edu.degree or edu.major %}
+                                <span class="edu-degree">
+                                    &#8212; {{ edu.degree }}
+                                    {% if edu.degree and edu.major %}，{% endif %}
+                                    {{ edu.major }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="edu-header-right">
+                                {% if edu.period %}<span class="edu-period">{{ edu.period }}</span>{% endif %}
+                            </td>
+                        </tr></table>
+                        {% if edu.achievements %}
+                        <ul class="edu-achievements">
+                            {% for a in edu.achievements %}
+                            <li>{{ a }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            {% elif key == 'projects' and key not in rendered_keys %}
+                {% if rendered_keys.append('projects') %}{% endif %}
+                {% if resume.projects %}
+                <div class="main-section">
+                    <div class="main-section-title">项目经历</div>
+                    {% for proj in resume.projects %}
+                    <div class="proj-item">
+                        <table class="proj-header-table"><tr>
+                            <td class="proj-header-left">
+                                <span class="proj-name">{{ proj.name }}</span>
+                                {% if proj.role %}<span class="proj-role"> &#8212; {{ proj.role }}</span>{% endif %}
+                            </td>
+                            <td class="proj-header-right">
+                                {% if proj.period %}<span class="proj-period">{{ proj.period }}</span>{% endif %}
+                            </td>
+                        </tr></table>
+                        {% if proj.description %}
+                        <div class="proj-desc">{{ proj.description }}</div>
+                        {% endif %}
+                        {% if proj.contributions %}
+                        <ul class="proj-contributions">
+                            {% for c in proj.contributions %}
+                            <li>{{ c }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            {% elif key == 'skills' and key not in rendered_keys %}
+                {# skills 在商务模板中固定在侧边栏，主内容区不渲染 #}
+                {% if rendered_keys.append('skills') %}{% endif %}
+            {% endif %}
+        {% endfor %}
+
+        {# 渲染 section_order 中未包含但有内容的章节 #}
+        {% if 'summary' not in rendered_keys and resume.summary %}
         <div class="main-section">
             <div class="main-section-title">个人简介</div>
             <div class="summary-text">{{ resume.summary }}</div>
         </div>
         {% endif %}
 
-        {% if resume.experience %}
+        {% if 'experience' not in rendered_keys and resume.experience %}
         <div class="main-section">
             <div class="main-section-title">工作经历</div>
             {% for exp in resume.experience %}
             <div class="exp-item">
-                <div class="exp-header">
-                    <div>
+                <table class="exp-header-table"><tr>
+                    <td class="exp-header-left">
                         <span class="exp-title">{{ exp.title }}</span>
-                        {% if exp.company %}<span class="exp-company"> — {{ exp.company }}</span>{% endif %}
-                    </div>
-                    {% if exp.period %}<span class="exp-period">{{ exp.period }}</span>{% endif %}
-                </div>
+                        {% if exp.company %}<span class="exp-company"> &#8212; {{ exp.company }}</span>{% endif %}
+                    </td>
+                    <td class="exp-header-right">
+                        {% if exp.period %}<span class="exp-period">{{ exp.period }}</span>{% endif %}
+                    </td>
+                </tr></table>
                 {% if exp.highlights %}
                 <ul class="exp-highlights">
                     {% for h in exp.highlights %}
@@ -357,24 +550,26 @@ body {
         </div>
         {% endif %}
 
-        {% if resume.education %}
+        {% if 'education' not in rendered_keys and resume.education %}
         <div class="main-section">
             <div class="main-section-title">教育背景</div>
             {% for edu in resume.education %}
             <div class="edu-item">
-                <div class="edu-header">
-                    <div>
+                <table class="edu-header-table"><tr>
+                    <td class="edu-header-left">
                         <span class="edu-school">{{ edu.school }}</span>
                         {% if edu.degree or edu.major %}
                         <span class="edu-degree">
-                            {% if edu.degree %}{{ edu.degree }}{% endif %}
-                            {% if edu.degree and edu.major %} · {% endif %}
-                            {% if edu.major %}{{ edu.major }}{% endif %}
+                            &#8212; {{ edu.degree }}
+                            {% if edu.degree and edu.major %}，{% endif %}
+                            {{ edu.major }}
                         </span>
                         {% endif %}
-                    </div>
-                    {% if edu.period %}<span class="edu-period">{{ edu.period }}</span>{% endif %}
-                </div>
+                    </td>
+                    <td class="edu-header-right">
+                        {% if edu.period %}<span class="edu-period">{{ edu.period }}</span>{% endif %}
+                    </td>
+                </tr></table>
                 {% if edu.achievements %}
                 <ul class="edu-achievements">
                     {% for a in edu.achievements %}
@@ -387,18 +582,20 @@ body {
         </div>
         {% endif %}
 
-        {% if resume.projects %}
+        {% if 'projects' not in rendered_keys and resume.projects %}
         <div class="main-section">
             <div class="main-section-title">项目经历</div>
             {% for proj in resume.projects %}
             <div class="proj-item">
-                <div class="proj-header">
-                    <div>
+                <table class="proj-header-table"><tr>
+                    <td class="proj-header-left">
                         <span class="proj-name">{{ proj.name }}</span>
-                        {% if proj.role %}<span class="proj-role"> — {{ proj.role }}</span>{% endif %}
-                    </div>
-                    {% if proj.period %}<span class="exp-period">{{ proj.period }}</span>{% endif %}
-                </div>
+                        {% if proj.role %}<span class="proj-role"> &#8212; {{ proj.role }}</span>{% endif %}
+                    </td>
+                    <td class="proj-header-right">
+                        {% if proj.period %}<span class="proj-period">{{ proj.period }}</span>{% endif %}
+                    </td>
+                </tr></table>
                 {% if proj.description %}
                 <div class="proj-desc">{{ proj.description }}</div>
                 {% endif %}
@@ -413,7 +610,8 @@ body {
             {% endfor %}
         </div>
         {% endif %}
-    </div>
+    </td>
+</tr></table>
 </div>
 </body>
 </html>

@@ -28,26 +28,26 @@ body {
     text-align: center;
     margin-bottom: 18px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #333;
+    border-bottom: 2px solid #1e293b;
 }
 
 .name {
     font-size: 20pt;
     font-weight: bold;
-    color: #1a1a2e;
+    color: #0f172a;
     letter-spacing: 2px;
     margin-bottom: 6px;
 }
 
 .contact-line {
     font-size: 9pt;
-    color: #555;
+    color: #64748b;
     text-align: center;
 }
 
 .contact-line .separator {
     margin: 0 6px;
-    color: #aaa;
+    color: #cbd5e1;
 }
 
 /* ===== 章节通用 ===== */
@@ -55,15 +55,29 @@ body {
     margin-bottom: 14px;
 }
 
+.section-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.section-bar {
+    width: 3px;
+    height: 16px;
+    background: #334155;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
 .section-title {
     font-size: 11pt;
     font-weight: bold;
-    color: #1a1a2e;
+    color: #1e293b;
     text-transform: uppercase;
     letter-spacing: 2px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #0f3460;
-    margin-bottom: 8px;
 }
 
 /* ===== 个人简介 ===== */
@@ -99,7 +113,10 @@ body {
 
 .entry-period {
     font-size: 8.5pt;
-    color: #777;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 3px;
     white-space: nowrap;
 }
 
@@ -150,7 +167,10 @@ body {
 
 .edu-period {
     font-size: 8.5pt;
-    color: #777;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 3px;
     white-space: nowrap;
 }
 
@@ -190,8 +210,18 @@ body {
 .skill-cat-name {
     font-size: 9.5pt;
     font-weight: bold;
-    color: #0f3460;
+    color: #334155;
     display: inline;
+}
+
+.skill-tag {
+    font-size: 8pt;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    margin: 2px 2px;
 }
 
 .skill-cat-items {
@@ -226,7 +256,10 @@ body {
 
 .proj-period {
     font-size: 8.5pt;
-    color: #777;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 3px;
     white-space: nowrap;
 }
 
@@ -294,14 +327,14 @@ body {
 
 {% if resume.summary %}
 <div class="section">
-    <div class="section-title">个人简介</div>
+    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">个人简介</div></div>
     <div class="summary-text">{{ resume.summary }}</div>
 </div>
 {% endif %}
 
 {% if resume.education %}
 <div class="section">
-    <div class="section-title">教育背景</div>
+    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">教育背景</div></div>
     {% for edu in resume.education %}
     <div class="edu-entry">
         <div class="edu-header">
@@ -327,7 +360,7 @@ body {
 
 {% if resume.experience %}
 <div class="section">
-    <div class="section-title">工作经历</div>
+    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">工作经历</div></div>
     {% for exp in resume.experience %}
     <div class="entry">
         <div class="entry-header">
@@ -349,12 +382,12 @@ body {
 
 {% if resume.skills %}
 <div class="section">
-    <div class="section-title">专业技能</div>
+    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">专业技能</div></div>
     <div class="skills-grid">
         {% for cat in resume.skills %}
         <div class="skill-category">
             <span class="skill-cat-name">{{ cat.category }}：</span>
-            <span class="skill-cat-items">{{ cat.skills | join('、') }}</span>
+            {% for s in cat.skills %}<span class="skill-tag">{{ s }}</span>{% endfor %}
         </div>
         {% endfor %}
     </div>
@@ -363,7 +396,7 @@ body {
 
 {% if resume.projects %}
 <div class="section">
-    <div class="section-title">项目经历</div>
+    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">项目经历</div></div>
     {% for proj in resume.projects %}
     <div class="proj-entry">
         <div class="proj-header">

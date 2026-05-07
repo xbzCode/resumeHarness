@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+/* ===== 紧凑型 - 高信息密度 ===== */
+@page { size: A4; margin: 1.2cm 1.5cm; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: "SimHei", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.35;
+    color: #333;
+    background: #fff;
+}
+
+.header {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #d1d5db;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.name {
+    font-size: 16pt;
+    font-weight: bold;
+    color: #111827;
+}
+
+.contact-line {
+    font-size: 8pt;
+    color: #9ca3af;
+    text-align: right;
+    max-width: 55%;
+}
+
+.section { margin-bottom: 8px; }
+
+.section-title {
+    font-size: 9.5pt;
+    font-weight: bold;
+    color: #1f2937;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #d1d5db;
+    margin-bottom: 5px;
+}
+
+.summary-text { font-size: 8.5pt; color: #4b5563; line-height: 1.4; }
+
+.entry { margin-bottom: 5px; }
+
+.entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.entry-title { font-size: 9pt; font-weight: bold; color: #111827; }
+.entry-sub { font-size: 8.5pt; color: #6b7280; margin-left: 4px; }
+.entry-period { font-size: 7.5pt; color: #9ca3af; white-space: nowrap; }
+
+.entry-details { list-style: none; padding-left: 0; }
+.entry-details li {
+    font-size: 8pt; color: #4b5563; padding-left: 10px; position: relative; margin-bottom: 0;
+}
+.entry-details li::before { content: "-"; position: absolute; left: 0; color: #9ca3af; }
+
+.edu-school { font-size: 9pt; font-weight: bold; color: #111827; }
+.edu-detail { font-size: 8pt; color: #6b7280; margin-left: 4px; }
+
+.skill-row { margin-bottom: 2px; }
+.skill-cat { font-size: 8.5pt; color: #374151; font-weight: 600; }
+.skill-items { font-size: 8pt; color: #6b7280; }
+
+.proj-name { font-size: 9pt; font-weight: bold; color: #111827; }
+.proj-role { font-size: 8pt; color: #9ca3af; margin-left: 4px; }
+.proj-desc { font-size: 8pt; color: #6b7280; margin-top: 1px; }
+
+@media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .entry, .edu-entry { page-break-inside: avoid; }
+    .section-title { page-break-after: avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="name">{{ resume.name }}</div>
+    <div class="contact-line">
+        {% if resume.contact.email %}{{ resume.contact.email }}{% endif %}
+        {% if resume.contact.email and (resume.contact.phone or resume.contact.location) %} &middot; {% endif %}
+        {% if resume.contact.phone %}{{ resume.contact.phone }}{% endif %}
+        {% if resume.contact.phone and resume.contact.location %} &middot; {% endif %}
+        {% if resume.contact.location %}{{ resume.contact.location }}{% endif %}
+        {% if resume.contact.website %} &middot; {{ resume.contact.website }}{% endif %}
+        {% if resume.contact.wechat %} &middot; 微信: {{ resume.contact.wechat }}{% endif %}
+        {% if not resume.contact.email and not resume.contact.phone and resume.contact.raw_text %}{{ resume.contact.raw_text }}{% endif %}
+    </div>
+</div>
+
+{% if resume.summary %}
+<div class="section">
+    <div class="section-title">个人简介</div>
+    <div class="summary-text">{{ resume.summary }}</div>
+</div>
+{% endif %}
+
+{% if resume.experience %}
+<div class="section">
+    <div class="section-title">工作经历</div>
+    {% for exp in resume.experience %}
+    <div class="entry">
+        <div class="entry-header">
+            <div>
+                <span class="entry-title">{{ exp.title }}</span>
+                {% if exp.company %}<span class="entry-sub">· {{ exp.company }}</span>{% endif %}
+            </div>
+            {% if exp.period %}<span class="entry-period">{{ exp.period }}</span>{% endif %}
+        </div>
+        {% if exp.highlights %}
+        <ul class="entry-details">
+            {% for h in exp.highlights %}<li>{{ h }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if resume.education %}
+<div class="section">
+    <div class="section-title">教育背景</div>
+    {% for edu in resume.education %}
+    <div class="entry">
+        <div class="entry-header">
+            <div>
+                <span class="edu-school">{{ edu.school }}</span>
+                <span class="edu-detail">{% if edu.degree %}{{ edu.degree }}{% endif %}{% if edu.degree and edu.major %} · {% endif %}{% if edu.major %}{{ edu.major }}{% endif %}</span>
+            </div>
+            {% if edu.period %}<span class="entry-period">{{ edu.period }}</span>{% endif %}
+        </div>
+        {% if edu.achievements %}
+        <ul class="entry-details">
+            {% for a in edu.achievements %}<li>{{ a }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if resume.skills %}
+<div class="section">
+    <div class="section-title">专业技能</div>
+    {% for cat in resume.skills %}
+    <div class="skill-row">
+        <span class="skill-cat">{{ cat.category }}：</span>
+        <span class="skill-items">{{ cat.skills | join(' · ') }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if resume.projects %}
+<div class="section">
+    <div class="section-title">项目经历</div>
+    {% for proj in resume.projects %}
+    <div class="entry">
+        <div class="entry-header">
+            <div>
+                <span class="proj-name">{{ proj.name }}</span>
+                {% if proj.role %}<span class="proj-role">· {{ proj.role }}</span>{% endif %}
+            </div>
+            {% if proj.period %}<span class="entry-period">{{ proj.period }}</span>{% endif %}
+        </div>
+        {% if proj.description %}<div class="proj-desc">{{ proj.description }}</div>{% endif %}
+        {% if proj.contributions %}
+        <ul class="entry-details">
+            {% for c in proj.contributions %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+</body>
+</html>

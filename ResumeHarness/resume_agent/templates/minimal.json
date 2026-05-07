@@ -1,0 +1,14 @@
+{
+  "name": "minimal",
+  "version": "1.0.0",
+  "display_name": "极简",
+  "description": "大量留白，纯黑白配色，仅用字号区分层级，适合外企/互联网",
+  "author": "ResumeHarness",
+  "layout": "single-column",
+  "color_scheme": {
+    "primary": "#18181b",
+    "accent": "#a1a1aa"
+  },
+  "recommended_industries": ["startup", "foreign", "internet"],
+  "has_html": true
+}

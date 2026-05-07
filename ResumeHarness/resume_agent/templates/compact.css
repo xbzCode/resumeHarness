@@ -1,0 +1,9 @@
+/* 紧凑型 - compact.css */
+@page { size: A4; margin: 1.2cm 1.5cm; }
+body { font-size: 9pt; line-height: 1.35; color: #333; max-width: 210mm; }
+h1 { font-size: 16pt; font-weight: bold; color: #111827; border-bottom: 1px solid #d1d5db; padding-bottom: 4px; margin-bottom: 8px; }
+h2 { font-size: 9.5pt; font-weight: bold; color: #1f2937; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid #d1d5db; padding-bottom: 3px; margin-top: 8px; margin-bottom: 5px; }
+h3 { font-size: 9pt; font-weight: bold; color: #111827; }
+p { font-size: 8.5pt; color: #4b5563; }
+ul { padding-left: 14px; }
+li { font-size: 8pt; color: #4b5563; margin-bottom: 0; }

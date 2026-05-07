@@ -1,0 +1,10 @@
+/* 科技风 - tech.css */
+@page { size: A4; margin: 2cm; }
+body { font-size: 10pt; line-height: 1.5; color: #333; max-width: 210mm; font-family: "Courier New", monospace; }
+h1 { font-size: 18pt; font-weight: bold; color: #111827; border-bottom: 2px solid #10b981; padding-bottom: 6px; margin-bottom: 12px; }
+h2 { font-size: 13pt; color: #111827; border-bottom: 1px solid #10b981; padding-bottom: 4px; margin-top: 16px; margin-bottom: 8px; }
+h2::before { content: "// "; color: #10b981; }
+h3 { font-size: 11pt; color: #111827; }
+p { font-size: 9.5pt; color: #555; }
+ul { padding-left: 16px; }
+li { font-size: 9pt; color: #444; margin-bottom: 2px; }

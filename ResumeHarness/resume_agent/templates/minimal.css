@@ -1,0 +1,9 @@
+/* 极简风 - minimal.css */
+@page { size: A4; margin: 2.5cm 2.2cm; }
+body { font-size: 10pt; line-height: 1.5; color: #18181b; max-width: 210mm; }
+h1 { font-size: 24pt; font-weight: 300; color: #09090b; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #e4e4e7; padding-bottom: 12px; }
+h2 { font-size: 9pt; font-weight: 600; color: #09090b; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 16px; margin-bottom: 8px; }
+h3 { font-size: 10pt; font-weight: 600; color: #18181b; }
+p { font-size: 9.5pt; color: #52525b; }
+ul { padding-left: 16px; }
+li { font-size: 9pt; color: #52525b; margin-bottom: 2px; }

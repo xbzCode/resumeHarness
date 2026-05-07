@@ -20,6 +20,7 @@ _PUBLIC_PATH_PREFIXES = (
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/refresh",
+    "/api/share/",     # 公开分享链接（UUID 随机，无需登录）
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -263,6 +264,12 @@ def hash_password(password: str) -> str:
     return f"{salt}:{hashed}"
 
 
+async def hash_password_async(password: str) -> str:
+    """异步密码哈希（在线程池中执行 CPU 密集操作）。"""
+    import asyncio
+    return await asyncio.to_thread(hash_password, password)
+
+
 def verify_password(password: str, password_hash: str) -> bool:
     """验证密码。"""
     import hashlib
@@ -276,3 +283,9 @@ def verify_password(password: str, password_hash: str) -> bool:
         "sha256", password.encode(), salt.encode(), 100000
     ).hex()
     return computed == stored_hash
+
+
+async def verify_password_async(password: str, password_hash: str) -> bool:
+    """异步密码验证（在线程池中执行 CPU 密集操作）。"""
+    import asyncio
+    return await asyncio.to_thread(verify_password, password, password_hash)

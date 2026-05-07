@@ -23,6 +23,7 @@ import {
   Check,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
+import { copyToClipboard } from "@/lib/clipboard";
 import { useChatStore } from "@/store/chat";
 import type { ResumeData } from "@/store/chat";
 import { streamChat, downloadFile, createAuthApi } from "@/lib/api";
@@ -32,6 +33,13 @@ import { ResumeDiffView } from "@/components/resume-diff-view";
 import type { SessionDetail, SessionMessage } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { TEMPLATE_LIST } from "@/components/templates/registry";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 let _idCounter = 0;
 function generateId() {
@@ -91,23 +99,11 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        // fallback for non-HTTPS
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
+    const ok = await copyToClipboard(text);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
+    } else {
       toast.error("复制失败");
     }
   }
@@ -228,19 +224,31 @@ function MessageBubble({
             )}
             {/* 操作按钮行 */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <div className="flex gap-0.5 mr-1">
-                {(["professional", "academic", "creative"] as const).map((tpl) => (
-                  <Button
-                    key={tpl}
-                    variant={activeTemplate === tpl ? "secondary" : "ghost"}
-                    size="sm"
-                    className="gap-1 text-xs h-7 px-2"
-                    onClick={() => setActiveTemplate(tpl)}
-                  >
-                    {tpl === "professional" ? "商务" : tpl === "academic" ? "学术" : "创意"}
-                  </Button>
-                ))}
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="gap-1 text-xs h-7" />}>
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: TEMPLATE_LIST.find(t => t.name === activeTemplate)?.color || "#3b82f6" }} />
+                  {TEMPLATE_LIST.find(t => t.name === activeTemplate)?.label || "模板"}
+                  <ChevronDown className="h-3 w-3 ml-0.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {TEMPLATE_LIST.map((tpl) => (
+                    <DropdownMenuItem
+                      key={tpl.name}
+                      onClick={() => setActiveTemplate(tpl.name)}
+                      className={activeTemplate === tpl.name ? "bg-accent" : ""}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tpl.color }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium">{tpl.label}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{tpl.description}</div>
+                        </div>
+                        {activeTemplate === tpl.name && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 variant="ghost"
                 size="sm"
