@@ -405,7 +405,7 @@ function convertSessionMessages(sessionMsgs: SessionMessage[]) {
         // tool results 不单独显示
       }
     }
-    const reasoning = (msg as Record<string, unknown>)._reasoning;
+    const reasoning = (msg as unknown as Record<string, unknown>)._reasoning;
     if (typeof reasoning === "string" && reasoning) {
       thinking = reasoning;
     }

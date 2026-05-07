@@ -276,7 +276,7 @@ function convertSessionMessages(sessionMsgs: import("@/lib/api").SessionMessage[
         textParts.push(block.text);
       }
     }
-    const reasoning = (msg as Record<string, unknown>)._reasoning;
+    const reasoning = (msg as unknown as Record<string, unknown>)._reasoning;
     if (typeof reasoning === "string" && reasoning) {
       thinking = reasoning;
     }

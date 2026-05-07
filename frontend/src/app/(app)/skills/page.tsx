@@ -356,7 +356,7 @@ export default function SkillsPage() {
         api<SkillMeta>(`/api/skills/${name}`).catch(() => existing),
         api<{ name: string; content: string }>(`/api/skills/${name}/content`).catch(() => null),
       ]);
-      setSkillDetail(detailData);
+      setSkillDetail(detailData ?? null);
       if (contentData) {
         setSkillContent(contentData.content);
       }
