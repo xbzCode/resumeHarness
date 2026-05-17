@@ -2,12 +2,34 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // 开发环境 API 代理，避免跨域
+  // /api/chat 由 app/api/chat/route.ts SSE 代理处理，此处排除
   async rewrites() {
-    const apiTarget = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const apiTarget = process.env.BACKEND_URL || "http://localhost:8000";
     return [
+      // 非 chat 的 API 路径走 rewrites 代理
       {
-        source: "/api/:path*",
-        destination: `${apiTarget}/api/:path*`,
+        source: "/api/auth/:path*",
+        destination: `${apiTarget}/api/auth/:path*`,
+      },
+      {
+        source: "/api/sessions/:path*",
+        destination: `${apiTarget}/api/sessions/:path*`,
+      },
+      {
+        source: "/api/resume/:path*",
+        destination: `${apiTarget}/api/resume/:path*`,
+      },
+      {
+        source: "/api/memory/:path*",
+        destination: `${apiTarget}/api/memory/:path*`,
+      },
+      {
+        source: "/api/settings/:path*",
+        destination: `${apiTarget}/api/settings/:path*`,
+      },
+      {
+        source: "/api/admin/:path*",
+        destination: `${apiTarget}/api/admin/:path*`,
       },
     ];
   },

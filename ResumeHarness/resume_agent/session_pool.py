@@ -160,6 +160,18 @@ class ResumeSessionPool:
             for entry in self._entries.values()
         ]
 
+    async def save_session_by_id(self, user_id: str, session_id: str) -> None:
+        """立即持久化指定会话的快照到磁盘（不淘汰）。
+
+        用于对话轮次完成后及时保存，确保 list_sessions 能查到最新会话。
+        """
+        session_key = self.make_session_key("web", user_id, session_id)
+        entry = self._entries.get(session_key)
+        if entry is None:
+            return
+        async with self._lock:
+            await self._save_snapshot(entry)
+
     async def _evict_oldest(self) -> None:
         """淘汰最早访问的会话（容量满时强制淘汰）。"""
         if not self._entries:

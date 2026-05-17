@@ -1,12 +1,17 @@
 import { ofetch } from "ofetch";
 import { useAuthStore } from "@/store/auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// 客户端永远通过 Next.js 代理请求后端，不走直连（避免浏览器 HTTP/1.1 连接池耗尽）
+const API_BASE = "";
 
 export { API_BASE };
 
+/** 默认请求超时（毫秒） */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export const api = ofetch.create({
   baseURL: API_BASE,
+  timeout: DEFAULT_TIMEOUT_MS,
   headers: {
     "Content-Type": "application/json",
   },
@@ -16,6 +21,7 @@ export const api = ofetch.create({
 export function createAuthApi(token: string) {
   return ofetch.create({
     baseURL: API_BASE,
+    timeout: DEFAULT_TIMEOUT_MS,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -31,9 +37,22 @@ export function createAuthApi(token: string) {
   });
 }
 
+/** 带超时的 fetch 封装 */
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(url, {
+    ...init,
+    signal: init.signal
+      ? AbortSignal.any([init.signal, controller.signal])
+      : controller.signal,
+  }).finally(() => clearTimeout(timer));
+}
+
 /** 带认证的 fetch 请求，401 时直接清除认证并跳转登录页 */
 async function authFetch(token: string, path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
     ...init,
     headers: {
       ...(init?.headers || {}),
@@ -146,6 +165,11 @@ export interface SessionMessage {
 
 // ---- SSE 流式对话 ----
 
+/** SSE 连接超时（等待首次响应，毫秒） */
+const SSE_CONNECT_TIMEOUT_MS = 30_000;
+/** SSE 数据读取超时（两次数据之间的最大间隔，毫秒） */
+const SSE_READ_TIMEOUT_MS = 120_000;
+
 export async function streamChat(
   token: string,
   body: ChatRequest,
@@ -154,6 +178,12 @@ export async function streamChat(
   onDone?: () => void,
 ): Promise<() => void> {
   const controller = new AbortController();
+  let abortedByUser = false;
+
+  // 连接超时：如果在 SSE_CONNECT_TIMEOUT_MS 内未收到响应，则中止
+  const connectTimer = setTimeout(() => {
+    controller.abort();
+  }, SSE_CONNECT_TIMEOUT_MS);
 
   fetch(`${API_BASE}/api/chat`, {
     method: "POST",
@@ -165,6 +195,8 @@ export async function streamChat(
     signal: controller.signal,
   })
     .then(async (response) => {
+      clearTimeout(connectTimer);
+
       if (!response.ok) {
         if (response.status === 401) {
           useAuthStore.getState().clearAuth();
@@ -181,9 +213,23 @@ export async function streamChat(
       const decoder = new TextDecoder();
       let buffer = "";
 
+      // 数据读取超时：每次成功读取后重置定时器
+      let readTimer = setTimeout(() => {
+        controller.abort();
+      }, SSE_READ_TIMEOUT_MS);
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          clearTimeout(readTimer);
+          break;
+        }
+
+        // 收到数据，重置读取超时
+        clearTimeout(readTimer);
+        readTimer = setTimeout(() => {
+          controller.abort();
+        }, SSE_READ_TIMEOUT_MS);
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -193,6 +239,7 @@ export async function streamChat(
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") {
+              clearTimeout(readTimer);
               onDone?.();
               return;
             }
@@ -206,13 +253,22 @@ export async function streamChat(
           }
         }
       }
+      clearTimeout(readTimer);
       onDone?.();
     })
     .catch((err) => {
-      if (err.name !== "AbortError") {
-        onError?.(err);
+      clearTimeout(connectTimer);
+      if (err.name === "AbortError") {
+        if (abortedByUser) return; // 用户主动中止，静默
+        onError?.(new Error("请求超时，请重试"));
+        return;
       }
+      onError?.(err);
     });
 
-  return () => controller.abort();
+  return () => {
+    abortedByUser = true;
+    clearTimeout(connectTimer);
+    controller.abort();
+  };
 }

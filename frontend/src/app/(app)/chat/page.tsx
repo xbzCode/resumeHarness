@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { copyToClipboard } from "@/lib/clipboard";
-import { useChatStore } from "@/store/chat";
+import { useChatStore, isPendingKey } from "@/store/chat";
 import type { ResumeData } from "@/store/chat";
 import { streamChat, downloadFile, createAuthApi } from "@/lib/api";
 import { ResumePreview } from "@/components/resume-preview";
@@ -426,23 +426,14 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token } = useAuthStore();
-  const {
-    sessionId,
-    messages,
-    isStreaming,
-    setSessionId,
-    addMessage,
-    appendToLastMessage,
-    appendToLastMessageThinking,
-    moveContentToThinking,
-    setStreaming,
-    setAbortController,
-    clearMessages,
-    setMessages,
-    setResumeIdOnLastMessage,
-    setResumeDataOnLastMessage,
-    setResumeScoreOnLastMessage,
-  } = useChatStore();
+
+  // 从 store 获取活跃会话数据（使用 selectors 避免不必要的重渲染）
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const activeSession = useChatStore((s) =>
+    s.activeSessionId ? s.sessions[s.activeSessionId] : undefined,
+  );
+  const messages = activeSession?.messages || [];
+  const isStreaming = activeSession?.isStreaming || false;
 
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -452,12 +443,30 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 组件卸载时：不中止后台流（其他会话可能还在流式输出）
+  // 只清理当前活跃会话的流（如果需要的话，保留由用户主动操作）
+  useEffect(() => {
+    return () => {
+      // 不再自动中止所有流，保持后台会话继续运行
+    };
+  }, []);
+
+  // URL sid 参数变化时加载对应会话
   useEffect(() => {
     const sid = searchParams.get("sid");
-    if (sid && sid !== sessionId && token) {
-      setSessionId(sid);
-      if (messages.length === 0) {
-        loadSession(sid);
+    if (sid && token) {
+      const store = useChatStore.getState();
+      // 只有当 sid 不是当前活跃会话时才切换
+      if (sid !== store.activeSessionId) {
+        // 检查该会话是否已经在 sessions 中
+        const existingSession = store.sessions[sid];
+        if (existingSession) {
+          // 会话已在内存中，直接切换
+          store.setActiveSessionId(sid);
+        } else {
+          // 需要从后端加载
+          loadSession(sid);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -465,6 +474,7 @@ export default function ChatPage() {
 
   async function loadSession(sid: string) {
     if (!token) return;
+    // 切换会话时：不中止其他会话的 SSE 流
     try {
       const authApi = createAuthApi(token);
       const data = await authApi<SessionDetail>(`/api/sessions/${sid}`);
@@ -473,49 +483,78 @@ export default function ChatPage() {
         return;
       }
       const converted = convertSessionMessages(data.messages);
-      setSessionId(sid);
-      setMessages(converted);
+      const store = useChatStore.getState();
+      // 设置会话数据到 sessions map
+      store.setMessagesOfSession(sid, converted);
+      store.setActiveSessionId(sid);
       router.replace(`/chat?sid=${sid}`, { scroll: false });
     } catch {
       toast.error("加载会话详情失败");
     }
   }
 
-  const handleSSEEvent = useCallback(
-    (event: MessageEvent) => {
+  /**
+   * 创建绑定到特定会话键的 SSE 事件处理器。
+   * 这样即使后台有其他会话在流式输出，事件也能正确路由到对应会话。
+   *
+   * 重要：session_started 事件会将 pending key 迁移为真实 session_id，
+   * handler 内部通过 currentKey 追踪迁移后的有效 key。
+   * 外部通过 getCurrentKey() 获取最新 key（用于 onDone/onError/abortController）。
+   */
+  function createSSEHandler(initialKey: string) {
+    // 追踪当前有效的 session key（pending → real id 迁移后会变）
+    let currentKey = initialKey;
+
+    const handler = (event: MessageEvent) => {
       const data = event.data;
       if (!data || typeof data !== "object") return;
 
+      const store = useChatStore.getState();
+
+      // 检查该会话是否仍在流式输出（防止残余事件）
+      const session = store.sessions[currentKey];
+      if (!session?.isStreaming) return;
+
       switch (data.type) {
         case "session_started":
-          setSessionId(data.session_id);
-          router.replace(`/chat?sid=${data.session_id}`, { scroll: false });
+          // 将待定会话迁移到真实 session_id
+          if (isPendingKey(currentKey)) {
+            store.migrateSession(currentKey, data.session_id);
+            // 更新追踪 key，后续事件路由到新 key
+            currentKey = data.session_id;
+            // 迁移后路由也更新
+            router.replace(`/chat?sid=${data.session_id}`, { scroll: false });
+          }
           break;
         case "thinking_delta":
-          appendToLastMessageThinking(data.text || "");
+          store.appendToLastMessageThinkingOfSession(currentKey, data.text || "");
           break;
         case "content_to_thinking":
-          moveContentToThinking();
+          store.moveContentToThinkingOfSession(currentKey);
           break;
         case "text_delta":
-          appendToLastMessage(data.text || "");
+          store.appendToLastMessageOfSession(currentKey, data.text || "");
           break;
         case "tool_execution_started":
-          appendToLastMessage(`\n> 🔧 调用工具: ${data.tool_name}\n`);
+          store.appendToLastMessageOfSession(currentKey, `\n> 🔧 调用工具: ${data.tool_name}\n`);
           break;
         case "tool_execution_completed":
-          appendToLastMessage(`> ✅ ${data.tool_name} 完成${data.is_error ? "（出错）" : ""}\n`);
+          store.appendToLastMessageOfSession(currentKey, `> ✅ ${data.tool_name} 完成${data.is_error ? "（出错）" : ""}\n`);
           break;
         case "status":
-          appendToLastMessage(`\n> 📌 ${data.message}\n`);
+          store.appendToLastMessageOfSession(currentKey, `\n> 📌 ${data.message}\n`);
           break;
         case "resume_generated":
-          setResumeIdOnLastMessage(data.resume_id);
-          toast.success("简历已生成！");
+          store.setResumeIdOnLastMessageOfSession(currentKey, data.resume_id);
+          // 仅当该会话是当前活跃会话时显示 toast
+          if (useChatStore.getState().activeSessionId === currentKey) {
+            toast.success("简历已生成！");
+          }
           break;
         case "resume_data":
           if (data.resume_id && data.data) {
-            setResumeDataOnLastMessage(
+            store.setResumeDataOnLastMessageOfSession(
+              currentKey,
               data.resume_id,
               data.data,
               data.template_hint || "professional",
@@ -526,7 +565,7 @@ export default function ChatPage() {
           break;
         case "resume_score":
           if (data.overall_score !== undefined) {
-            setResumeScoreOnLastMessage({
+            store.setResumeScoreOnLastMessageOfSession(currentKey, {
               overall_score: data.overall_score,
               dimensions: data.dimensions || {},
               suggestions: data.suggestions || [],
@@ -540,62 +579,93 @@ export default function ChatPage() {
         case "ping":
           break;
         case "error":
-          appendToLastMessage(`\n> ⚠️ 错误: ${data.message}\n`);
+          store.appendToLastMessageOfSession(currentKey, `\n> ⚠️ 错误: ${data.message}\n`);
           break;
       }
-    },
-    [appendToLastMessage, appendToLastMessageThinking, moveContentToThinking, setResumeIdOnLastMessage, setResumeDataOnLastMessage, setResumeScoreOnLastMessage, setSessionId],
-  );
+    };
+
+    return {
+      handler,
+      getCurrentKey: () => currentKey,
+    };
+  }
 
   async function handleSend() {
     const prompt = input.trim();
-    if (!prompt || isStreaming || !token) return;
+    if (!prompt || !token) return;
+
+    // 只检查当前活跃会话是否在流式输出（不影响其他会话）
+    if (isStreaming) return;
 
     setInput("");
 
-    addMessage({
+    const store = useChatStore.getState();
+
+    // 如果没有活跃会话，创建新的待定会话
+    let sessionKey = store.activeSessionId;
+    if (!sessionKey) {
+      sessionKey = store.newPendingSession();
+    }
+
+    // 添加用户消息
+    store.addMessageToSession(sessionKey, {
       id: generateId(),
       role: "user",
       content: prompt,
       timestamp: Date.now(),
     });
 
-    addMessage({
+    // 添加空的助手消息占位
+    store.addMessageToSession(sessionKey, {
       id: generateId(),
       role: "assistant",
       content: "",
       timestamp: Date.now(),
     });
 
-    setStreaming(true);
+    // 设置该会话为流式状态
+    store.setStreamingOfSession(sessionKey, true);
+
+    // 确定发送给后端的 session_id（待定键发 undefined 让后端分配）
+    const backendSessionId = isPendingKey(sessionKey) ? undefined : sessionKey;
+
+    // 创建绑定到该会话的 SSE 处理器
+    const { handler: sseHandler, getCurrentKey } = createSSEHandler(sessionKey);
 
     streamChat(
       token,
-      { prompt, session_id: sessionId || undefined },
-      handleSSEEvent,
+      { prompt, session_id: backendSessionId },
+      sseHandler,
       (err) => {
-        toast.error(`对话出错: ${err.message}`);
-        setStreaming(false);
+        const key = getCurrentKey();
+        const store = useChatStore.getState();
+        store.appendToLastMessageOfSession(key, `\n> ⚠️ 对话出错: ${err.message}\n`);
+        store.setStreamingOfSession(key, false);
+        store.setAbortControllerOfSession(key, null);
       },
       () => {
-        setStreaming(false);
+        const key = getCurrentKey();
+        const store = useChatStore.getState();
+        store.setStreamingOfSession(key, false);
+        store.setAbortControllerOfSession(key, null);
       },
     ).then((abort) => {
-      setAbortController(abort);
+      const key = getCurrentKey();
+      useChatStore.getState().setAbortControllerOfSession(key, abort);
     });
   }
 
   function handleStop() {
-    useChatStore.getState().abortController?.();
-    setStreaming(false);
-    setAbortController(null);
+    const store = useChatStore.getState();
+    if (store.activeSessionId) {
+      store.abortSessionStream(store.activeSessionId);
+    }
   }
 
   function handleNewChat() {
-    useChatStore.getState().abortController?.();
-    clearMessages();
-    setStreaming(false);
-    setAbortController(null);
+    const store = useChatStore.getState();
+    // 不中止其他会话的流，只切换到新的待定会话
+    store.newPendingSession();
     router.replace("/chat", { scroll: false });
   }
 
@@ -613,13 +683,18 @@ export default function ChatPage() {
     }
   }, [input]);
 
+  // 显示用的 session 标识（真实 ID 取前 8 位，待定键显示"新对话"）
+  const displaySessionId = activeSessionId && !isPendingKey(activeSessionId)
+    ? activeSessionId.slice(0, 8)
+    : null;
+
   return (
     <div className="flex h-full flex-col">
       {/* 顶栏 */}
       <div className="flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {sessionId ? `${sessionId.slice(0, 8)}` : "新对话"}
+            {displaySessionId || "新对话"}
           </span>
         </div>
         <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1 text-xs h-7">

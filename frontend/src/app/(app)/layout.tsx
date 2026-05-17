@@ -41,7 +41,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
-import { useChatStore } from "@/store/chat";
+import { useChatStore, isPendingKey } from "@/store/chat";
 import { createAuthApi, type SessionInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AuthGuard } from "@/components/auth-guard";
@@ -108,25 +108,34 @@ function UserMenu() {
 function SessionList() {
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
-  const sessionId = useChatStore((s) => s.sessionId);
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const refreshKey = useChatStore((s) => s.refreshKey);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<SessionInfo | null>(null);
 
+  // 初始加载 & token 变化时加载
   useEffect(() => {
     if (token) loadSessions();
   }, [token]);
 
+  // 对话流完成或切换会话时刷新列表
+  useEffect(() => {
+    if (token && refreshKey > 0) loadSessions();
+  }, [refreshKey]);
+
   async function loadSessions() {
     if (!token) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const authApi = createAuthApi(token);
       const data = await authApi<{ sessions: SessionInfo[] }>("/api/sessions");
       setSessions(data.sessions || []);
     } catch {
-      // 静默失败
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -134,16 +143,26 @@ function SessionList() {
 
   async function handleLoadSession(sid: string) {
     if (!token) return;
-    try {
-      const authApi = createAuthApi(token);
-      const data = await authApi<import("@/lib/api").SessionDetail>(`/api/sessions/${sid}`);
-      if (!data.found || !data.messages) return;
-      const converted = convertSessionMessages(data.messages);
-      useChatStore.getState().setSessionId(sid);
-      useChatStore.getState().setMessages(converted);
+    // 切换会话时：不中止其他会话的 SSE 流，仅切换活跃会话
+    const store = useChatStore.getState();
+    const existingSession = store.sessions[sid];
+    if (existingSession) {
+      // 会话已在内存中，直接切换
+      store.setActiveSessionId(sid);
       router.push(`/chat?sid=${sid}`);
-    } catch {
-      // 静默
+    } else {
+      // 需要从后端加载
+      try {
+        const authApi = createAuthApi(token);
+        const data = await authApi<import("@/lib/api").SessionDetail>(`/api/sessions/${sid}`);
+        if (!data.found || !data.messages) return;
+        const converted = convertSessionMessages(data.messages);
+        store.setMessagesOfSession(sid, converted);
+        store.setActiveSessionId(sid);
+        router.push(`/chat?sid=${sid}`);
+      } catch {
+        toast.error("加载会话失败");
+      }
     }
   }
 
@@ -154,9 +173,8 @@ function SessionList() {
       await authApi(`/api/sessions/${deleteTarget.session_id}`, { method: "DELETE" });
       setSessions((prev) => prev.filter((s) => s.session_id !== deleteTarget.session_id));
       // 如果删除的是当前会话，清空聊天
-      if (deleteTarget.session_id === sessionId) {
-        useChatStore.getState().clearMessages();
-        useChatStore.getState().setSessionId(null);
+      if (deleteTarget.session_id === activeSessionId) {
+        useChatStore.getState().clearSession(deleteTarget.session_id);
         router.replace("/chat");
       }
       toast.success("已删除");
@@ -168,8 +186,8 @@ function SessionList() {
   }
 
   function handleNewChat() {
-    useChatStore.getState().abortController?.();
-    useChatStore.getState().clearMessages();
+    // 不中止其他会话的流，仅创建新的待定会话
+    useChatStore.getState().newPendingSession();
     router.replace("/chat");
   }
 
@@ -193,6 +211,17 @@ function SessionList() {
             <div className="flex justify-center py-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/40" />
             </div>
+          ) : loadError ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5">
+              <p className="text-[11px] text-destructive/70">获取对话失败</p>
+              <button
+                type="button"
+                onClick={loadSessions}
+                className="text-[11px] text-muted-foreground/50 hover:text-foreground underline underline-offset-2 transition-colors"
+              >
+                重试
+              </button>
+            </div>
           ) : sessions.length === 0 ? (
             <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground/40">
               暂无历史对话
@@ -205,7 +234,7 @@ function SessionList() {
                     key={s.session_id}
                     className={cn(
                       "group flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors cursor-pointer",
-                      s.session_id === sessionId
+                      s.session_id === activeSessionId
                         ? "bg-accent text-accent-foreground"
                         : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                     )}
@@ -313,8 +342,8 @@ function SidebarContent() {
           variant="outline"
           className="w-full gap-2 h-8 text-xs"
           onClick={() => {
-            useChatStore.getState().abortController?.();
-            useChatStore.getState().clearMessages();
+            // 不中止其他会话的流，仅创建新的待定会话
+            useChatStore.getState().newPendingSession();
             router.replace("/chat");
           }}
         >

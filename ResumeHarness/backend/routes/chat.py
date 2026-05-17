@@ -352,6 +352,7 @@ async def _chat_stream(
     prompt: str,
     user_id: str,
     session_id: str,
+    pool: ResumeSessionPool | None = None,
 ) -> AsyncIterator[str]:
     """生成 SSE 流式事件，附带心跳保活。"""
     import asyncio
@@ -387,7 +388,18 @@ async def _chat_stream(
                 last_ping = now
 
             # 当本轮对话完成时，检测是否有简历输出
-            if isinstance(event, AssistantTurnComplete) and event.message:
+            if isinstance(event, AssistantTurnComplete):
+                # 对话轮次完成后，立即持久化会话快照到磁盘
+                # 确保前端刷新 sessions 列表时能查到最新会话
+                if pool is not None:
+                    try:
+                        await pool.save_session_by_id(user_id, session_id)
+                    except Exception as exc:
+                        logger.warning("对话完成后保存会话快照失败: %s", exc)
+
+                if not event.message:
+                    continue
+
                 # 刷新标记过滤器
                 remaining = marker_filter.flush()
                 if remaining:
@@ -479,7 +491,7 @@ async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse
         )
 
     return StreamingResponse(
-        _chat_stream(bundle, request.prompt, user_id=user_id, session_id=session_id),
+        _chat_stream(bundle, request.prompt, user_id=user_id, session_id=session_id, pool=pool),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
