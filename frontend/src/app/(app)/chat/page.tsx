@@ -21,6 +21,7 @@ import {
   Plus,
   Copy,
   Check,
+  MessageSquare,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -690,133 +691,175 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏 */}
-      <div className="flex h-11 items-center justify-between border-b px-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {displaySessionId || "新对话"}
-          </span>
+      {/* 顶栏 - 仅在有消息时显示 */}
+      {messages.length > 0 && (
+        <div className="flex h-12 items-center justify-between border-b px-4">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-medium">对话</h2>
+            {displaySessionId && (
+              <span className="text-xs text-muted-foreground">· {displaySessionId}</span>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1 text-xs h-7">
+            <Plus className="h-3.5 w-3.5" />
+            新对话
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1 text-xs h-7">
-          <Plus className="h-3.5 w-3.5" />
-          新对话
-        </Button>
-      </div>
+      )}
 
-      {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-5 py-20 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5">
-              <FileText className="h-7 w-7 text-primary/60" />
-            </div>
-            <div>
-              <h3 className="text-base font-medium">Resume Agent</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                输入你的简历和目标岗位，开始智能优化
-              </p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2">
-              {[
-                "帮我优化这份简历，目标岗位是前端工程师",
-                "根据这个 JD 调整我的简历",
-                "我的简历有哪些可以改进的地方？",
-              ].map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => {
-                    setInput(suggestion);
-                    textareaRef.current?.focus();
-                  }}
-                >
-                  {suggestion}
-                </Button>
-              ))}
+      {messages.length === 0 ? (
+        /* ===== 空状态：居中布局 ===== */
+        <div className="flex flex-1 flex-col items-center justify-center px-4 pb-8">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Bot className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight">Resume Agent</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            输入你的简历和目标岗位，开始智能优化
+          </p>
+          {/* 快捷提示 */}
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {[
+              "帮我优化这份简历，目标岗位是前端工程师",
+              "根据这个 JD 调整我的简历",
+              "我的简历有哪些可以改进的地方？",
+            ].map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => {
+                  setInput(suggestion);
+                  textareaRef.current?.focus();
+                }}
+                className="rounded-full border bg-background px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+          {/* 居中输入框 */}
+          <div className="mt-8 w-full max-w-2xl">
+            <div className="relative rounded-2xl border bg-background shadow-sm focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="描述你的需求，例如：帮我优化简历匹配前端工程师岗位…"
+                className="min-h-[56px] max-h-[200px] resize-none rounded-2xl border-0 px-4 py-3.5 pb-10 text-sm shadow-none focus-visible:ring-0"
+                rows={2}
+                disabled={isStreaming}
+              />
+              <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground/40 mr-1">Enter 发送</span>
+                {isStreaming ? (
+                  <Button variant="destructive" size="icon" onClick={handleStop} className="h-8 w-8 rounded-xl">
+                    <Square className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="h-8 w-8 rounded-xl"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        ) : (
-          <div className="py-2">
-            {messages.map((msg, idx) => {
-              const isLastAssistantStreaming =
-                msg.role === "assistant" &&
-                idx === messages.length - 1 &&
-                isStreaming;
-              if (
-                isLastAssistantStreaming &&
-                !msg.content &&
-                !msg.thinking
-              ) {
-                return null;
-              }
-              return (
-                <MessageBubble
-                  key={msg.id}
-                  role={msg.role}
-                  content={msg.content}
-                  thinking={msg.thinking}
-                  toolCalls={msg.toolCalls}
-                  resumeId={msg.resumeId}
-                  resumeData={msg.resumeData}
-                  templateHint={msg.templateHint}
-                  suggestions={msg.suggestions}
-                  resumePrefix={msg.resumePrefix}
-                  resumeScore={msg.resumeScore}
-                  prevResumeContent={msg.prevResumeContent}
-                  isStreaming={isLastAssistantStreaming}
-                />
-              );
-            })}
-            {isStreaming && messages[messages.length - 1]?.content === "" && !messages[messages.length - 1]?.thinking && (
-              <div className="flex gap-3 px-6 py-4">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Bot className="h-3.5 w-3.5 text-primary" />
+        </div>
+      ) : (
+        /* ===== 有消息：消息列表 + 底部输入框 ===== */
+        <>
+          <div className="flex-1 overflow-y-auto">
+            <div className="py-2">
+              {messages.map((msg, idx) => {
+                const isLastAssistantStreaming =
+                  msg.role === "assistant" &&
+                  idx === messages.length - 1 &&
+                  isStreaming;
+                if (
+                  isLastAssistantStreaming &&
+                  !msg.content &&
+                  !msg.thinking
+                ) {
+                  return null;
+                }
+                return (
+                  <MessageBubble
+                    key={msg.id}
+                    role={msg.role}
+                    content={msg.content}
+                    thinking={msg.thinking}
+                    toolCalls={msg.toolCalls}
+                    resumeId={msg.resumeId}
+                    resumeData={msg.resumeData}
+                    templateHint={msg.templateHint}
+                    suggestions={msg.suggestions}
+                    resumePrefix={msg.resumePrefix}
+                    resumeScore={msg.resumeScore}
+                    prevResumeContent={msg.prevResumeContent}
+                    isStreaming={isLastAssistantStreaming}
+                  />
+                );
+              })}
+              {isStreaming && messages[messages.length - 1]?.content === "" && !messages[messages.length - 1]?.thinking && (
+                <div className="flex gap-3 px-6 py-4">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <Bot className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <div className="flex items-center gap-2 rounded-2xl bg-muted px-4 py-2.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">思考中…</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 rounded-2xl bg-muted px-4 py-2.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">思考中…</span>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          {/* 底部输入框 */}
+          <div className="border-t px-4 py-3">
+            <div className="mx-auto max-w-2xl">
+              <div className="relative rounded-2xl border bg-background shadow-sm focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                <Textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="继续对话…"
+                  className="min-h-[44px] max-h-[200px] resize-none rounded-2xl border-0 px-4 py-3 pb-9 text-sm shadow-none focus-visible:ring-0"
+                  rows={1}
+                  disabled={isStreaming}
+                />
+                <div className="absolute bottom-1.5 right-2 flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground/40 mr-1">Enter 发送</span>
+                  {isStreaming ? (
+                    <Button variant="destructive" size="icon" onClick={handleStop} className="h-7 w-7 rounded-lg">
+                      <Square className="h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="icon"
+                      onClick={handleSend}
+                      disabled={!input.trim()}
+                      className="h-7 w-7 rounded-lg"
+                    >
+                      <Send className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               </div>
-            )}
-            <div ref={bottomRef} />
+              <p className="mt-1 text-center text-[10px] text-muted-foreground/40">
+                Shift+Enter 换行
+              </p>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* 输入区 */}
-      <div className="border-t px-4 py-3">
-        <div className="mx-auto flex max-w-3xl gap-2">
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入消息…"
-            className="min-h-[40px] max-h-[200px] resize-none rounded-xl text-sm"
-            rows={1}
-            disabled={isStreaming}
-          />
-          {isStreaming ? (
-            <Button variant="destructive" size="icon" onClick={handleStop} className="shrink-0 rounded-xl h-10 w-10">
-              <Square className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="shrink-0 rounded-xl h-10 w-10"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-        <p className="mt-1.5 text-center text-[11px] text-muted-foreground/50">
-          Enter 发送 · Shift+Enter 换行
-        </p>
-      </div>
+        </>
+      )}
     </div>
   );
 }
