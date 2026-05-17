@@ -1,5 +1,15 @@
 # 详细设计
 
+> ⚠️ **过时声明**：本文档为初始设计基准，系统已迭代至 P4 阶段，部分设计已演进。当前实际实现状态请以 `docs/已实现功能.md` 为准。
+> 主要变更：
+> - 模板从 3 套扩展到 7 套，引入 template.json 元数据规范 + 注册表
+> - SkillLoaderTool 从仅支持 resume-skill 扩展为支持所有已注册技能，引入 Front Matter 规范
+> - memory_write 白名单从 3 个文件扩展到 4 个（+custom_instructions.md）
+> - MCP 新增 McpServerBase 共享框架、annotations 规范、JD 抓取服务
+> - 系统提示词外置为 .md 模板文件，新增用户自定义指令注入
+> - LLM 配置供应商中立化
+> - 简历新增评分、多轮优化、原地编辑、拖拽排序、DOCX/HTML 下载、分享链接
+
 ## 1. 精简版 RuntimeBundle 构建
 
 ### 1.1 设计目标

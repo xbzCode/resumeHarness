@@ -1,5 +1,16 @@
 # 项目架构
 
+> ⚠️ **过时声明**：本文档为初始设计基准，系统已迭代至 P4 阶段，部分设计已演进。当前实际实现状态请以 `docs/已实现功能.md` 为准。
+> 主要变更：
+> - 模板从 3 套扩展到 7 套（+minimal/elegant/tech/compact）
+> - Skill 系统引入 Front Matter 规范，SkillLoaderTool 支持所有已注册技能
+> - MCP 从 2 个服务扩展到 3 个（+JD抓取服务），新增 McpServerBase 共享框架和 annotations 规范
+> - 模板引入 template.json 元数据规范 + 注册表机制
+> - 系统提示词外置为 .md 模板文件，新增用户自定义指令注入
+> - LLM 配置供应商中立化（LLM_API_KEY 优先于 DEEPSEEK_API_KEY）
+> - 前端从 SPA 升级为 Next.js App Router
+> - 新增简历评分、多轮优化、原地编辑、拖拽排序、DOCX/HTML 下载、分享链接等 P4 功能
+
 ## 1. 产品定位
 
 Resume Agent 是一个基于 OpenHarness 重构的简历智能体，核心能力是结合用户简历与招聘岗位 JD，智能生成匹配岗位的优化简历，支持 Web 下载和飞书/微信等第三方渠道交互。

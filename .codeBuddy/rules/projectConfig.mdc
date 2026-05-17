@@ -1,17 +1,37 @@
 ---
-description: 
+description: Resume Agent Harness 项目规则
 alwaysApply: true
 enabled: true
-updatedAt: 2026-04-18T03:10:17.771Z
+updatedAt: 2026-05-17T16:00:00.000Z
 provider: 
 ---
 
-1、OpenHarness 是实现resume agent harness项目的源码参考，不应该修改其任何内容
-2、docs\缺陷修复记录.md 记录了resume agent harness 的缺陷修复记录，每当完成缺陷修复记录后你都需要更新它
-3、ResumeHarness 是实现resume agent harness项目的源码，需要修改其中的代码
-4、docs\项目架构.md 是实现resume agent harness项目的架构图，执行代码生成任务需要以其为基准
-5、docs\详细设计.md 是实现resume agent harness项目的详细设计文档，执行代码生成任务需要以其为基准
-6、docs\迭代规划.md 是实现resume agent harness项目的迭代规划文档，执行代码生成任务需要以其为基准，避免一次生成多个文件
-7、所有代码的实现都在ResumeHarness文件夹下
-8、OpenHarness 只是源码参考，不应该作为 ResumeHarness 的依赖安装
-9、docs\已实现功能.md 是实现resume agent harness项目的已实现功能文档，执行代码生成任务需要以其为基准，完成任务开发测试后需更新此文档
+## 项目结构
+
+1、OpenHarness 是源码参考，不修改
+2、ResumeHarness 是后端源码
+3、后端 ResumeHarness/，前端 frontend/，MCP mcp_servers/
+4、OpenHarness 不作为依赖安装
+
+## 文档体系（按需加载）
+
+5、docs/current/ 是当前迭代的全部活跃文档，日常任务只需加载此目录
+6、docs/current/roadmap.md 是任务清单，开发任务需以其为基准
+7、docs/current/changelog.md 是实现记录（最高基准），完成任务后更新
+8、docs/current/bugs.md 是缺陷记录，修复缺陷后更新
+9、docs/current/plans/ 是需求规划目录，新需求先创建规划文件再开发
+10、docs/reference/specs.md 是扩展规范，涉及 Skill/MCP/模板/工具/提示词/记忆 开发时参考
+11、docs/reference/architecture.md 是架构概要，涉及架构调整时参考
+12、docs/archive/ 是历史迭代归档，仅回溯时按需读取，日常不加载
+13、docs/archive/design/ 是初始设计文档（已过时），仅作历史参考
+
+## 迭代状态
+
+14、当前迭代：P4（已完成 P0-P3，归档在 docs/archive/）
+
+## 开发纪律
+
+15、每次只聚焦一个功能模块
+16、修改代码前先阅读相关源文件确认当前状态
+17、完成任务后更新：① changelog.md ② roadmap.md ③ bugs.md（如有）④ plans/ 对应文件
+18、需求规划文件状态流转：🟡 规划 → 🔵 开发中 → ✅ 已完成

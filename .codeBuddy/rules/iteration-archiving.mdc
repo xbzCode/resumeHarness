@@ -1,0 +1,37 @@
+---
+description: 迭代归档流程，当用户声明迭代完成时参照执行
+alwaysApply: true
+enabled: true
+updatedAt: 2026-05-17T16:00:00.000Z
+provider: 
+---
+
+## 迭代归档流程
+
+当用户声明当前迭代完成（如"P4 完成"或"进入 P5"）时，执行以下步骤：
+
+### 1. 归档当前迭代
+
+将 `docs/current/` 整体移动到 `docs/archive/P{n}/`（n 为当前迭代编号）：
+- `current/roadmap.md` → `archive/P{n}/roadmap.md`
+- `current/changelog.md` → `archive/P{n}/changelog.md`
+- `current/bugs.md` → `archive/P{n}/bugs.md`
+- `current/plans/` → `archive/P{n}/plans/`
+
+### 2. 创建新的当前迭代文档
+
+在 `docs/current/` 下创建：
+- `roadmap.md`：写入下一迭代的待办任务 + 再下一迭代的概要 + 总体节奏表（更新状态）
+- `changelog.md`：空模板（仅含标题 `# P{n+1} 实现记录`）
+- `bugs.md`：空模板（仅含标题 `# P{n+1} 缺陷修复记录`）
+- `plans/` 目录 + `plans/README.md`
+
+### 3. 更新规则
+
+更新 `projectConfig.mdc` 第 14 条的迭代编号为 P{n+1}。
+
+### 4. 归档说明
+
+- 归档是**整体迁移**，不做内容拆分
+- 归档后的文件日常不加载，仅回溯时按需读取
+- 如果归档中有未完成的需求规划，需在新的 roadmap.md 中重新登记
