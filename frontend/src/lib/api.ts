@@ -51,14 +51,15 @@ function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = DEFAULT_TI
 }
 
 /** 带认证的 fetch 请求，401 时直接清除认证并跳转登录页 */
-async function authFetch(token: string, path: string, init?: RequestInit): Promise<Response> {
+async function authFetch(token: string, path: string, init?: RequestInit & { timeoutMs?: number }): Promise<Response> {
+  const { timeoutMs, ...restInit } = init || {};
   const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    ...init,
+    ...restInit,
     headers: {
-      ...(init?.headers || {}),
+      ...(restInit?.headers || {}),
       Authorization: `Bearer ${token}`,
     },
-  });
+  }, timeoutMs);
 
   if (res.status === 401) {
     if (typeof window !== "undefined") {
@@ -70,9 +71,12 @@ async function authFetch(token: string, path: string, init?: RequestInit): Promi
   return res;
 }
 
+/** 下载超时（毫秒），PDF/DOCX 渲染可能较慢 */
+const DOWNLOAD_TIMEOUT_MS = 120_000;
+
 /** 下载文件（返回 Blob） */
 export async function downloadFile(token: string, path: string): Promise<Blob> {
-  const res = await authFetch(token, path);
+  const res = await authFetch(token, path, { timeoutMs: DOWNLOAD_TIMEOUT_MS });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.blob();
 }

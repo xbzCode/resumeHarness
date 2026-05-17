@@ -119,6 +119,26 @@ class ResumeData(BaseModel):
         if not contact_parts and self.contact.raw_text:
             contact_parts.append(self.contact.raw_text)
 
+        # 计算有内容的章节，并按 section_order 排序
+        default_order = ["summary", "experience", "education", "skills", "projects"]
+        order = self.section_order or default_order
+        has_content_map = {
+            "summary": bool(self.summary),
+            "experience": bool(self.experience),
+            "education": bool(self.education),
+            "skills": bool(self.skills),
+            "projects": bool(self.projects),
+        }
+        # 按 section_order 排序，只包含有内容的章节
+        sections: list[str] = []
+        for key in order:
+            if key in has_content_map and has_content_map[key] and key not in sections:
+                sections.append(key)
+        # 补充 section_order 中未包含但有内容的章节
+        for key in default_order:
+            if has_content_map[key] and key not in sections:
+                sections.append(key)
+
         return {
             "resume": self,
             "contact_text": " | ".join(contact_parts),
@@ -127,4 +147,5 @@ class ResumeData(BaseModel):
             "has_skills": bool(self.skills),
             "has_projects": bool(self.projects),
             "has_summary": bool(self.summary),
+            "sections": sections,
         }

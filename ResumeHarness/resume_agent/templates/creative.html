@@ -345,14 +345,14 @@ body {
 
     <!-- 内容区域 -->
     <div class="content">
-        {% if resume.summary %}
+        {% for section in sections %}
+        {% if section == "summary" %}
         <div class="summary-card">
             <div class="section-label">个人简介</div>
             <div class="summary-text">{{ resume.summary }}</div>
         </div>
-        {% endif %}
 
-        {% if resume.experience %}
+        {% elif section == "experience" %}
         <div class="section">
             <div class="section-header">
                 <div class="section-dot"></div>
@@ -375,9 +375,8 @@ body {
             </div>
             {% endfor %}
         </div>
-        {% endif %}
 
-        {% if resume.skills %}
+        {% elif section == "skills" %}
         <div class="section">
             <div class="section-header">
                 <div class="section-dot"></div>
@@ -396,9 +395,8 @@ body {
                 {% endfor %}
             </div>
         </div>
-        {% endif %}
 
-        {% if resume.education %}
+        {% elif section == "education" %}
         <div class="section">
             <div class="section-header">
                 <div class="section-dot"></div>
@@ -425,9 +423,8 @@ body {
             </div>
             {% endfor %}
         </div>
-        {% endif %}
 
-        {% if resume.projects %}
+        {% elif section == "projects" %}
         <div class="section">
             <div class="section-header">
                 <div class="section-dot"></div>
@@ -453,7 +450,9 @@ body {
             </div>
             {% endfor %}
         </div>
+
         {% endif %}
+        {% endfor %}
     </div>
 </div>
 </body>

@@ -6,7 +6,7 @@
 /* ===== 学术风 - 传统单栏居中布局 ===== */
 @page {
     size: A4;
-    margin: 2.2cm 2cm;
+    margin: 24px;
 }
 
 * {
@@ -83,9 +83,11 @@ body {
 /* ===== 个人简介 ===== */
 .summary-text {
     font-size: 9.5pt;
-    color: #444;
+    color: #4b5563;
     line-height: 1.7;
     text-align: justify;
+    padding-left: 12px;
+    border-left: 1px solid #cbd5e1;
 }
 
 /* ===== 工作经历 ===== */
@@ -103,7 +105,7 @@ body {
 .entry-title {
     font-size: 10.5pt;
     font-weight: bold;
-    color: #16213e;
+    color: #1e293b;
 }
 
 .entry-subtitle {
@@ -138,7 +140,7 @@ body {
     content: "•";
     position: absolute;
     left: -8px;
-    color: #0f3460;
+    color: #334155;
     font-size: 10pt;
 }
 
@@ -157,7 +159,7 @@ body {
 .edu-school {
     font-size: 10.5pt;
     font-weight: bold;
-    color: #16213e;
+    color: #1e293b;
 }
 
 .edu-degree-major {
@@ -191,20 +193,19 @@ body {
     content: "•";
     position: absolute;
     left: -8px;
-    color: #0f3460;
+    color: #334155;
 }
 
 /* ===== 专业技能 ===== */
-.skills-grid {
+.skills-list {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 4px;
 }
 
 .skill-category {
-    margin-bottom: 4px;
-    flex: 1 1 45%;
-    min-width: 200px;
+    margin-bottom: 0;
 }
 
 .skill-cat-name {
@@ -218,8 +219,8 @@ body {
     font-size: 8pt;
     color: #475569;
     background: #f1f5f9;
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: 1px 8px;
+    border-radius: 4px;
     display: inline-block;
     margin: 2px 2px;
 }
@@ -245,7 +246,7 @@ body {
 .proj-name {
     font-size: 10.5pt;
     font-weight: bold;
-    color: #16213e;
+    color: #1e293b;
 }
 
 .proj-role {
@@ -288,7 +289,7 @@ body {
     content: "•";
     position: absolute;
     left: -8px;
-    color: #0f3460;
+    color: #334155;
 }
 
 /* ===== 打印优化 ===== */
@@ -297,10 +298,7 @@ body {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    .entry, .edu-entry, .proj-entry {
-        page-break-inside: avoid;
-    }
-    .section-title {
+    .section-title-row {
         page-break-after: avoid;
     }
 }
@@ -312,27 +310,48 @@ body {
 <div class="header">
     <div class="name">{{ resume.name }}</div>
     <div class="contact-line">
-        {% if resume.contact.email %}{{ resume.contact.email }}{% endif %}
+        {% if resume.contact.email %}✉ {{ resume.contact.email }}{% endif %}
         {% if resume.contact.email and resume.contact.phone %}<span class="separator">|</span>{% endif %}
-        {% if resume.contact.phone %}{{ resume.contact.phone }}{% endif %}
-        {% if resume.contact.phone and resume.contact.location %}<span class="separator">|</span>{% endif %}
-        {% if resume.contact.location %}{{ resume.contact.location }}{% endif %}
-        {% if resume.contact.location and resume.contact.website %}<span class="separator">|</span>{% endif %}
-        {% if resume.contact.website %}{{ resume.contact.website }}{% endif %}
+        {% if resume.contact.phone %}☎ {{ resume.contact.phone }}{% endif %}
+        {% if (resume.contact.email or resume.contact.phone) and resume.contact.location %}<span class="separator">|</span>{% endif %}
+        {% if resume.contact.location %}📍 {{ resume.contact.location }}{% endif %}
+        {% if (resume.contact.email or resume.contact.phone or resume.contact.location) and resume.contact.website %}<span class="separator">|</span>{% endif %}
+        {% if resume.contact.website %}🌐 {{ resume.contact.website }}{% endif %}
         {% if resume.contact.linkedin %}<span class="separator">|</span>LinkedIn: {{ resume.contact.linkedin }}{% endif %}
         {% if resume.contact.wechat %}<span class="separator">|</span>微信: {{ resume.contact.wechat }}{% endif %}
         {% if not resume.contact.email and not resume.contact.phone and resume.contact.raw_text %}{{ resume.contact.raw_text }}{% endif %}
     </div>
 </div>
 
-{% if resume.summary %}
+{% for section in sections %}
+{% if section == "summary" %}
 <div class="section">
     <div class="section-title-row"><div class="section-bar"></div><div class="section-title">个人简介</div></div>
     <div class="summary-text">{{ resume.summary }}</div>
 </div>
-{% endif %}
 
-{% if resume.education %}
+{% elif section == "experience" %}
+<div class="section">
+    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">工作经历</div></div>
+    {% for exp in resume.experience %}
+    <div class="entry">
+        <div class="entry-header">
+            <div>
+                <span class="entry-title">{{ exp.title }}</span>
+                {% if exp.company %}<span class="entry-subtitle"> — {{ exp.company }}</span>{% endif %}
+            </div>
+            {% if exp.period %}<span class="entry-period">{{ exp.period }}</span>{% endif %}
+        </div>
+        {% if exp.highlights %}
+        <ul class="entry-details">
+            {% for h in exp.highlights %}<li>{{ h }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{% elif section == "education" %}
 <div class="section">
     <div class="section-title-row"><div class="section-bar"></div><div class="section-title">教育背景</div></div>
     {% for edu in resume.education %}
@@ -356,34 +375,11 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.experience %}
-<div class="section">
-    <div class="section-title-row"><div class="section-bar"></div><div class="section-title">工作经历</div></div>
-    {% for exp in resume.experience %}
-    <div class="entry">
-        <div class="entry-header">
-            <div>
-                <span class="entry-title">{{ exp.title }}</span>
-                {% if exp.company %}<span class="entry-subtitle"> — {{ exp.company }}</span>{% endif %}
-            </div>
-            {% if exp.period %}<span class="entry-period">{{ exp.period }}</span>{% endif %}
-        </div>
-        {% if exp.highlights %}
-        <ul class="entry-details">
-            {% for h in exp.highlights %}<li>{{ h }}</li>{% endfor %}
-        </ul>
-        {% endif %}
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
-{% if resume.skills %}
+{% elif section == "skills" %}
 <div class="section">
     <div class="section-title-row"><div class="section-bar"></div><div class="section-title">专业技能</div></div>
-    <div class="skills-grid">
+    <div class="skills-list">
         {% for cat in resume.skills %}
         <div class="skill-category">
             <span class="skill-cat-name">{{ cat.category }}：</span>
@@ -392,9 +388,8 @@ body {
         {% endfor %}
     </div>
 </div>
-{% endif %}
 
-{% if resume.projects %}
+{% elif section == "projects" %}
 <div class="section">
     <div class="section-title-row"><div class="section-bar"></div><div class="section-title">项目经历</div></div>
     {% for proj in resume.projects %}
@@ -417,7 +412,9 @@ body {
     </div>
     {% endfor %}
 </div>
+
 {% endif %}
+{% endfor %}
 
 </body>
 </html>

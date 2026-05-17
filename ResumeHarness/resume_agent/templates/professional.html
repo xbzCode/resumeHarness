@@ -402,129 +402,16 @@ td.main {
         {% endif %}
     </td>
 
-    <!-- 主内容区 - 按 section_order 动态渲染 -->
+    <!-- 主内容区 -->
     <td class="main">
-        {% set section_order = resume.section_order or ['summary', 'experience', 'education', 'projects'] %}
-        {% set rendered_keys = [] %}
-
-        {% for key in section_order %}
-            {% if key == 'summary' and key not in rendered_keys %}
-                {% if rendered_keys.append('summary') %}{% endif %}
-                {% if resume.summary %}
-                <div class="main-section">
-                    <div class="main-section-title">个人简介</div>
-                    <div class="summary-text">{{ resume.summary }}</div>
-                </div>
-                {% endif %}
-
-            {% elif key == 'experience' and key not in rendered_keys %}
-                {% if rendered_keys.append('experience') %}{% endif %}
-                {% if resume.experience %}
-                <div class="main-section">
-                    <div class="main-section-title">工作经历</div>
-                    {% for exp in resume.experience %}
-                    <div class="exp-item">
-                        <table class="exp-header-table"><tr>
-                            <td class="exp-header-left">
-                                <span class="exp-title">{{ exp.title }}</span>
-                                {% if exp.company %}<span class="exp-company"> &#8212; {{ exp.company }}</span>{% endif %}
-                            </td>
-                            <td class="exp-header-right">
-                                {% if exp.period %}<span class="exp-period">{{ exp.period }}</span>{% endif %}
-                            </td>
-                        </tr></table>
-                        {% if exp.highlights %}
-                        <ul class="exp-highlights">
-                            {% for h in exp.highlights %}
-                            <li>{{ h }}</li>
-                            {% endfor %}
-                        </ul>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-            {% elif key == 'education' and key not in rendered_keys %}
-                {% if rendered_keys.append('education') %}{% endif %}
-                {% if resume.education %}
-                <div class="main-section">
-                    <div class="main-section-title">教育背景</div>
-                    {% for edu in resume.education %}
-                    <div class="edu-item">
-                        <table class="edu-header-table"><tr>
-                            <td class="edu-header-left">
-                                <span class="edu-school">{{ edu.school }}</span>
-                                {% if edu.degree or edu.major %}
-                                <span class="edu-degree">
-                                    &#8212; {{ edu.degree }}
-                                    {% if edu.degree and edu.major %}，{% endif %}
-                                    {{ edu.major }}
-                                </span>
-                                {% endif %}
-                            </td>
-                            <td class="edu-header-right">
-                                {% if edu.period %}<span class="edu-period">{{ edu.period }}</span>{% endif %}
-                            </td>
-                        </tr></table>
-                        {% if edu.achievements %}
-                        <ul class="edu-achievements">
-                            {% for a in edu.achievements %}
-                            <li>{{ a }}</li>
-                            {% endfor %}
-                        </ul>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-            {% elif key == 'projects' and key not in rendered_keys %}
-                {% if rendered_keys.append('projects') %}{% endif %}
-                {% if resume.projects %}
-                <div class="main-section">
-                    <div class="main-section-title">项目经历</div>
-                    {% for proj in resume.projects %}
-                    <div class="proj-item">
-                        <table class="proj-header-table"><tr>
-                            <td class="proj-header-left">
-                                <span class="proj-name">{{ proj.name }}</span>
-                                {% if proj.role %}<span class="proj-role"> &#8212; {{ proj.role }}</span>{% endif %}
-                            </td>
-                            <td class="proj-header-right">
-                                {% if proj.period %}<span class="proj-period">{{ proj.period }}</span>{% endif %}
-                            </td>
-                        </tr></table>
-                        {% if proj.description %}
-                        <div class="proj-desc">{{ proj.description }}</div>
-                        {% endif %}
-                        {% if proj.contributions %}
-                        <ul class="proj-contributions">
-                            {% for c in proj.contributions %}
-                            <li>{{ c }}</li>
-                            {% endfor %}
-                        </ul>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-            {% elif key == 'skills' and key not in rendered_keys %}
-                {# skills 在商务模板中固定在侧边栏，主内容区不渲染 #}
-                {% if rendered_keys.append('skills') %}{% endif %}
-            {% endif %}
-        {% endfor %}
-
-        {# 渲染 section_order 中未包含但有内容的章节 #}
-        {% if 'summary' not in rendered_keys and resume.summary %}
+        {% for section in sections %}
+        {% if section == "summary" %}
         <div class="main-section">
             <div class="main-section-title">个人简介</div>
             <div class="summary-text">{{ resume.summary }}</div>
         </div>
-        {% endif %}
 
-        {% if 'experience' not in rendered_keys and resume.experience %}
+        {% elif section == "experience" %}
         <div class="main-section">
             <div class="main-section-title">工作经历</div>
             {% for exp in resume.experience %}
@@ -548,9 +435,8 @@ td.main {
             </div>
             {% endfor %}
         </div>
-        {% endif %}
 
-        {% if 'education' not in rendered_keys and resume.education %}
+        {% elif section == "education" %}
         <div class="main-section">
             <div class="main-section-title">教育背景</div>
             {% for edu in resume.education %}
@@ -580,9 +466,8 @@ td.main {
             </div>
             {% endfor %}
         </div>
-        {% endif %}
 
-        {% if 'projects' not in rendered_keys and resume.projects %}
+        {% elif section == "projects" %}
         <div class="main-section">
             <div class="main-section-title">项目经历</div>
             {% for proj in resume.projects %}
@@ -609,7 +494,11 @@ td.main {
             </div>
             {% endfor %}
         </div>
+
+        {% elif section == "skills" %}
+        {# skills 在商务模板中固定在侧边栏，主内容区不渲染 #}
         {% endif %}
+        {% endfor %}
     </td>
 </tr></table>
 </div>

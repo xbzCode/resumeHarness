@@ -164,14 +164,14 @@ body {
     </div>
 
     <div class="main">
-        {% if resume.summary %}
+        {% for section in sections %}
+        {% if section == "summary" %}
         <div class="main-section">
             <div class="main-section-title">个人简介</div>
             <div class="summary-text">{{ resume.summary }}</div>
         </div>
-        {% endif %}
 
-        {% if resume.experience %}
+        {% elif section == "experience" %}
         <div class="main-section">
             <div class="main-section-title">工作经历</div>
             {% for exp in resume.experience %}
@@ -187,9 +187,8 @@ body {
             </div>
             {% endfor %}
         </div>
-        {% endif %}
 
-        {% if resume.education %}
+        {% elif section == "education" %}
         <div class="main-section">
             <div class="main-section-title">教育背景</div>
             {% for edu in resume.education %}
@@ -205,9 +204,8 @@ body {
             </div>
             {% endfor %}
         </div>
-        {% endif %}
 
-        {% if resume.projects %}
+        {% elif section == "projects" %}
         <div class="main-section">
             <div class="main-section-title">项目经历</div>
             {% for proj in resume.projects %}
@@ -224,7 +222,11 @@ body {
             </div>
             {% endfor %}
         </div>
+
+        {% elif section == "skills" %}
+        {# skills 在 elegant 模板中固定在侧边栏，主内容区不渲染 #}
         {% endif %}
+        {% endfor %}
     </div>
 </div>
 </body>

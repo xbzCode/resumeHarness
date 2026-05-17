@@ -6,7 +6,7 @@
 /* ===== 极简主义 - 纯黑白、大量留白 ===== */
 @page {
     size: A4;
-    margin: 2.5cm 2.2cm;
+    margin: 1.5cm 1.6cm;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -37,8 +37,6 @@ body {
     font-size: 9pt;
     color: #a1a1aa;
 }
-
-.contact-line .sep { margin: 0 8px; }
 
 .section { margin-bottom: 20px; }
 
@@ -123,24 +121,24 @@ body {
     <div class="name">{{ resume.name }}</div>
     <div class="contact-line">
         {% if resume.contact.email %}{{ resume.contact.email }}{% endif %}
-        {% if resume.contact.email and (resume.contact.phone or resume.contact.location or resume.contact.website) %}<span class="sep">|</span>{% endif %}
+        {% if resume.contact.email and resume.contact.phone %}  {% endif %}
         {% if resume.contact.phone %}{{ resume.contact.phone }}{% endif %}
-        {% if resume.contact.phone and resume.contact.location %}<span class="sep">|</span>{% endif %}
+        {% if (resume.contact.email or resume.contact.phone) and resume.contact.location %}  {% endif %}
         {% if resume.contact.location %}{{ resume.contact.location }}{% endif %}
-        {% if resume.contact.location and resume.contact.website %}<span class="sep">|</span>{% endif %}
+        {% if (resume.contact.email or resume.contact.phone or resume.contact.location) and resume.contact.website %}  {% endif %}
         {% if resume.contact.website %}{{ resume.contact.website }}{% endif %}
-        {% if resume.contact.wechat %}<span class="sep">|</span>微信: {{ resume.contact.wechat }}{% endif %}
+        {% if resume.contact.wechat %}  微信: {{ resume.contact.wechat }}{% endif %}
+        {% if not resume.contact.email and not resume.contact.phone and resume.contact.raw_text %}  {{ resume.contact.raw_text }}{% endif %}
     </div>
 </div>
 
-{% if resume.summary %}
+{% for section in sections %}
+{% if section == "summary" %}
 <div class="section">
-    <div class="section-title">Experience</div>
     <p style="font-size:9.5pt; color:#52525b; line-height:1.6;">{{ resume.summary }}</p>
 </div>
-{% endif %}
 
-{% if resume.experience %}
+{% elif section == "experience" %}
 <div class="section">
     <div class="section-title">Experience</div>
     {% for exp in resume.experience %}
@@ -160,9 +158,8 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.education %}
+{% elif section == "education" %}
 <div class="section">
     <div class="section-title">Education</div>
     {% for edu in resume.education %}
@@ -182,9 +179,8 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.skills %}
+{% elif section == "skills" %}
 <div class="section">
     <div class="section-title">Skills</div>
     {% for cat in resume.skills %}
@@ -194,9 +190,8 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.projects %}
+{% elif section == "projects" %}
 <div class="section">
     <div class="section-title">Projects</div>
     {% for proj in resume.projects %}
@@ -217,7 +212,9 @@ body {
     </div>
     {% endfor %}
 </div>
+
 {% endif %}
+{% endfor %}
 
 </body>
 </html>

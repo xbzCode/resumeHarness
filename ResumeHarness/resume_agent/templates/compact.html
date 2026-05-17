@@ -104,14 +104,14 @@ body {
     </div>
 </div>
 
-{% if resume.summary %}
+{% for section in sections %}
+{% if section == "summary" %}
 <div class="section">
     <div class="section-title">个人简介</div>
     <div class="summary-text">{{ resume.summary }}</div>
 </div>
-{% endif %}
 
-{% if resume.experience %}
+{% elif section == "experience" %}
 <div class="section">
     <div class="section-title">工作经历</div>
     {% for exp in resume.experience %}
@@ -131,9 +131,8 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.education %}
+{% elif section == "education" %}
 <div class="section">
     <div class="section-title">教育背景</div>
     {% for edu in resume.education %}
@@ -153,9 +152,8 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.skills %}
+{% elif section == "skills" %}
 <div class="section">
     <div class="section-title">专业技能</div>
     {% for cat in resume.skills %}
@@ -165,9 +163,8 @@ body {
     </div>
     {% endfor %}
 </div>
-{% endif %}
 
-{% if resume.projects %}
+{% elif section == "projects" %}
 <div class="section">
     <div class="section-title">项目经历</div>
     {% for proj in resume.projects %}
@@ -188,7 +185,9 @@ body {
     </div>
     {% endfor %}
 </div>
+
 {% endif %}
+{% endfor %}
 
 </body>
 </html>
