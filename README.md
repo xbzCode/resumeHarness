@@ -1,6 +1,20 @@
 # Resume Agent
 
-简历智能体 - 基于 OpenHarness 裁剪的简历优化 Agent，接入 DeepSeek API。
+<p align="center">
+  <strong>简历智能体</strong> — 基于 OpenHarness 裁剪的简历优化 Agent，接入 DeepSeek API
+</p>
+
+<p align="center">
+  <a href="https://212.64.20.181/" target="_blank">🌐 在线体验</a>
+  &nbsp;·&nbsp;
+  体验账号：<code>admin</code> &nbsp;密码：<code>123456</code>
+</p>
+
+---
+
+## 运行展示
+
+![Resume Agent Demo](demo.gif)
 
 ## 快速开始
 
